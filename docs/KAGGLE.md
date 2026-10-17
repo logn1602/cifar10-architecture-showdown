@@ -15,9 +15,26 @@ budget with room for the first upgrade. On a single T4 the core alone overruns t
 
 ## 1. Get the repo onto Kaggle
 
-Two options. **Dataset upload is the default** — it needs no GitHub account.
+Two options. **Cloning is the default** — the repo is public, so it needs no credentials and no
+upload step.
 
-### Option A — upload as a Kaggle Dataset (recommended)
+### Option A — clone from GitHub (recommended)
+
+Nothing to do: the notebook's CONFIG cell already points at the repo.
+
+```python
+SOURCE   = "git"
+REPO_URL = "https://github.com/logn1602/cifar10-architecture-showdown.git"
+```
+
+Internet must be **On** (Settings → Internet) or the clone fails. `data/` is gitignored, so the
+clone is small and CIFAR-10 is downloaded fresh on Kaggle — which is what makes the split
+fingerprint check in §5 meaningful.
+
+### Option B — upload as a Kaggle Dataset
+
+Use this if you want to run a local working copy that is ahead of what you have pushed, or if
+Internet is off. Set `SOURCE = "dataset"` in the CONFIG cell, then:
 
 Zip the repo *without* the venv, the data and the git history:
 
@@ -46,18 +63,6 @@ In the notebook editor, attach it with **Add Input → Datasets → your dataset
 > Excluding `data/` is deliberate: Kaggle re-downloads CIFAR-10 itself, and the 45k/5k split is
 > regenerated from scratch. The sha256 fingerprints printed by `check_data.py` are how you verify
 > the regenerated split matches your local one — see §5 below.
-
-### Option B — clone from GitHub
-
-Push the repo to GitHub, then in the notebook's CONFIG cell set:
-
-```python
-SOURCE   = "git"
-REPO_URL = "https://github.com/<you>/cifar10-architecture-showdown.git"
-```
-
-A public repo needs no credentials. For a private one, add a Kaggle Secret and splice a token into
-the URL — but a Dataset upload is simpler.
 
 ---
 

@@ -92,6 +92,10 @@ See [`docs/KAGGLE.md`](docs/KAGGLE.md) for the step-by-step, and
 ## Reproduce what exists today
 
 ```powershell
+# 0. Clone
+git clone https://github.com/logn1602/cifar10-architecture-showdown.git
+cd cifar10-architecture-showdown
+
 # 1. Environment (Python 3.11, CPU-only PyTorch)
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
