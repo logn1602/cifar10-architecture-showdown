@@ -1,0 +1,164 @@
+# =============================================================================
+# Shared training protocol -- spec Section 3, "the fairness protocol".
+#
+# DO NOT change anything under `train:` or `data:` without the owner's sign-off.
+# Every model gets identical treatment except the architecture itself; the only
+# per-model tuning allowed is the learning rate, chosen by the Phase 3 LR sweep.
+#
+# Top-level values are FULL mode. `mode_9h:` mirrors spec Section 12.2 and is
+# applied as an override by the unattended queue -- it never edits this block.
+#
+# YAML gotcha, enforced throughout this file: exponent-notation scalars must
+# carry a decimal point (`1.0e-6`, not `1e-6`). PyYAML follows the YAML 1.1
+# resolver, which parses an undotted `1e-6` as a *string*, and a string
+# learning rate blows up a long way downstream.
+# =============================================================================
+
+data:
+  root: data                 # repo-relative; resolved against PROJECT_ROOT
+  num_classes: 10
+  val_per_class: 500         # 500 x 10 classes -> 5,000 val / 45,000 train
+  split_seed: 0              # spec: stratified, fixed seed 0
+  subset_seed: 0             # E2 subset draw; deliberately NOT the train seed
+  # CIFAR-10 channel statistics (spec Section 3). These are the canonical
+  # full-50k values; scripts/check_data.py reports the measured 45k values too.
+  mean: [0.4914, 0.4822, 0.4465]
+  std:  [0.2470, 0.2435, 0.2616]
+  download: true
+  # Loader settings -- num_workers is confirmed by scripts/bench_dataloader.py
+  # on each machine. On Windows every worker is a spawned process, so the
+  # optimum here is usually lower than on Linux/Kaggle. Re-measure on Kaggle.
+  num_workers: 4
+  pin_memory: true           # automatically disabled when CUDA is unavailable
+  persistent_workers: true   # automatically disabled when num_workers == 0
+  prefetch_factor: 2
+
+train:
+  epochs: 200
+  batch_size: 128
+  optimizer: adamw
+  betas: [0.9, 0.999]
+  weight_decay: 0.05
+  # Parameters matching these substrings get NO weight decay. Decaying biases,
+  # norm affine params, positional embeddings or the cls token measurably hurts
+  # ViT/Mixer, and would make the comparison unfair to them.
+  no_decay_keywords: [bias, norm, bn, pos_embed, position, cls_token, gamma, layer_scale]
+  lr: null                   # per-model; filled in by the Phase 3 LR sweep
+  schedule:
+    type: cosine
+    per_step: true           # spec Section 4: stepped per optimizer step
+    warmup_epochs: 5         # full mode
+    warmup_fraction: 0.05    # used instead when a run is defined in steps (E2, 9h)
+    min_lr: 1.0e-6
+  label_smoothing: 0.1
+  grad_clip_norm: 1.0
+  amp:
+    enabled: true
+    dtype: bf16              # falls back to fp16 + GradScaler when bf16 is unsupported
+  seeds: [0, 1, 2]
+  checkpoint_selection: best_val_acc
+  compile: false             # spec 1.3: torch.compile is unreliable on Windows
+  channels_last_for_conv: true
+
+augmentation:
+  # "standard" is the protocol default and is what every headline number uses.
+  standard:
+    random_crop: {size: 32, padding: 4}
+    random_hflip: {p: 0.5}
+  # "strong" is E3 only. RandAugment runs on PIL input (before ToTensor);
+  # RandomErasing runs on the normalized tensor (after Normalize); Mixup/CutMix
+  # are batch-level and live in the training loop, not the transform pipeline.
+  strong:
+    random_crop: {size: 32, padding: 4}
+    random_hflip: {p: 0.5}
+    randaugment: {num_ops: 2, magnitude: 9}
+    random_erasing: {p: 0.25}
+    mixup: {alpha: 0.8}
+    cutmix: {alpha: 1.0}
+    mixup_cutmix_prob: 0.5   # p=0.5 switch between the two
+
+experiments:
+  # E2 data-hunger fractions (spec Section 6). Subsets are stratified AND
+  # nested, so the 5% set is a subset of the 10% set, etc.
+  data_fractions: [0.05, 0.1, 0.25, 0.5, 1.0]
+  # Equal optimization steps across fractions: 200 epochs x 351 steps/epoch
+  # (45,000 // 128 with drop_last) = 70,200. The spec's ~70,400 is the same
+  # number computed without drop_last; we use drop_last so step counts are exact.
+  e2_total_steps: 70200
+  lr_sweep: {lrs: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3], epochs: 40}
+  e4_pretrained:
+    models: [vit_small_patch16_224.augreg_in21k_ft_in1k, resnet50.a1_in1k]
+    image_size: 224
+    lrs: [3.0e-5, 1.0e-4, 3.0e-4]
+    epochs: 10
+    warmup_epochs: 1
+    batch_size: 64
+  e5_corruptions: [gaussian_noise, gaussian_blur, contrast, brightness, jpeg, pixelate]
+  e5_severities: [1, 2, 3, 4, 5]
+  e6_patch_grids: [2, 4, 8]
+
+eval:
+  ece_bins: 15
+
+# =============================================================================
+# 9-hour unattended mode -- spec Section 12.2. Trimmed seeds/epochs, same six
+# models and same seven experiments. Applied as an override over the blocks
+# above; everything not named here (split, normalization, optimizer, weight
+# decay, label smoothing, AMP, grad clipping, checkpoint selection) is
+# unchanged, which is the whole point.
+# =============================================================================
+mode_9h:
+  budget_hours: 8            # leaves ~1h of slack inside the 9h window
+  lr_sweep: {lrs: [5.0e-4, 1.0e-3, 2.0e-3], epochs: 10, auto_pick: true}
+  e1: {epochs: 100, seeds: [0]}
+  # Every E2 point gets exactly 7,040 steps (= 20 full-data epochs), so the
+  # curve is step-matched across fractions. E2 does NOT reuse E1 here.
+  e2: {fractions: [0.1, 0.25, 1.0], total_steps: 7040, seeds: [0]}
+  e3: {enabled: false, epochs: 100}   # upgrade only -- see upgrades below
+  e4: {lr: 1.0e-4, epochs: 5, seeds: [0]}
+  e5: {enabled: true}
+  e6: {enabled: true}
+  e7: {enabled: true}
+  warmup_fraction: 0.05      # 5% of total steps in every run
+  # Spec 12.3, added in this order while the projection still fits the budget.
+  upgrades:
+    - {name: e3_resnet18_vit, detail: "E3 for resnet18 + vit, 100 epochs each"}
+    - {name: e1_seeds_1_2, detail: "E1 seeds 1 and 2 -> mean +/- std error bars"}
+    - {name: e3_remaining, detail: "E3 for the other 4 models"}
+    - {name: e2_extra_fractions, detail: "E2 fractions 0.05 and 0.5"}
+    - {name: e2_seeds_1_2, detail: "E2 seeds 1 and 2"}
+  # Spec 12.4 trim ladder, applied only if even the core does not fit.
+  # E1 is never cut below 100 epochs.
+  trim_ladder:
+    - {target: e4.epochs, from: 5, to: 3}
+    - {target: e2.total_steps, from: 7040, to: 5280}
+    - {target: lr_sweep.epochs, from: 10, to: 6}
+
+# =============================================================================
+# Presentation -- spec Section 8. One fixed colour per model, used in EVERY
+# figure so the reader learns the mapping once.
+# =============================================================================
+figures:
+  dpi: 200
+  model_colors:
+    mlp: "#7f7f7f"           # grey
+    simple_cnn: "#1f77b4"    # blue
+    resnet18: "#2ca02c"      # green
+    vit: "#d62728"           # red
+    mlp_mixer: "#ff7f0e"     # orange
+    convnext_mini: "#9467bd" # purple
+  model_labels:
+    mlp: MLP
+    simple_cnn: Simple CNN
+    resnet18: ResNet-18
+    vit: ViT
+    mlp_mixer: MLP-Mixer
+    convnext_mini: ConvNeXt-mini
+
+paths:
+  results: results
+  runs: results/runs
+  figures: results/figures
+  tables: results/tables
+  tensorboard: results/tb
+  failures: results/failures

@@ -1,0 +1,164 @@
+# =============================================================================
+# Reference throughputs for scripts/estimate_compute.py.
+#
+#   source: estimate       <-- every number here is DERIVED, not measured
+#   confidence: low
+#
+# These exist so Phase 0 can answer spec Section 9 ("estimate the compute
+# budget") on a machine with no usable GPU. Phase 3's scripts/plan_budget.py
+# replaces them with real measurements taken on the actual hardware; until then
+# treat everything downstream as an order-of-magnitude sanity check, not a
+# promise.
+#
+# -----------------------------------------------------------------------------
+# Where the per-model numbers come from
+# -----------------------------------------------------------------------------
+# Forward MACs per 32x32 image, counted from the Section 5 architectures:
+#
+#   mlp            3072->1024->512->256->10
+#                  3072*1024 + 1024*512 + 512*256 + 256*10 = 3.80 M MACs
+#   simple_cnn     3->64,64->64 @32x32 ; 64->128,128->128 @16x16 ;
+#                  128->256,256->256 @8x8, all 3x3
+#                  1.77 + 37.75 + 18.87 + 37.75 + 18.87 + 37.75 = 152.8 M MACs
+#   resnet18       CIFAR stem (no maxpool) + [2,2,2,2] BasicBlocks
+#                  1.77 + 151.0 + 134.2 + 134.2 + 134.2 = 555.4 M MACs
+#   vit            65 tokens x 7 blocks x (qkv 442k + proj 147k + attn 50k
+#                  + mlp 590k) = 65 * 1.23 M * 7 = 559.5 M MACs
+#   mlp_mixer      8 blocks x (token-mix 2*64*192*384 = 9.44 M
+#                  + channel-mix 64*2*384*1536 = 75.5 M) = 679.5 M MACs
+#   convnext_mini  dims [64,128,256,512], depths [2,2,6,2] @ 32/16/8/4
+#                  73.5 + 70.3 + 206.1 + 67.9 + stem 1.8 + downsample 25.2
+#                  = 444.8 M MACs
+#
+# A training step is forward + backward ~= 3x forward FLOPs, and 1 FLOP = 2 MACs,
+# so per epoch (45,000 images):
+#
+#   TFLOPs/epoch = 45000 * 3 * 2 * MACs / 1e12
+#     mlp 1.0 | simple_cnn 41.3 | resnet18 150.0 | vit 151.1
+#     mlp_mixer 183.5 | convnext_mini 120.1
+#
+# A T4 peaks at ~65 TFLOP/s fp16 tensor-core, but 32x32 inputs at batch 128
+# leave the tensor cores badly under-fed: small spatial dims, low arithmetic
+# intensity, and kernel-launch overhead dominate. Sustained utilisation on this
+# workload is realistically 15-25% of peak (~10-13 TFLOP/s), lower again for
+# ConvNeXt (depthwise 7x7 is memory-bound, not FLOP-bound).
+#
+# The sec_per_epoch values below are therefore NOT pure FLOPs/throughput --
+# they are rounded UP toward published CIFAR-10 wall-clock figures for these
+# architectures on T4-class hardware, which run roughly 1.5-2x the naive FLOP
+# estimate. Being conservative here is deliberate: an optimistic budget is how
+# an unattended 9-hour run ends with half the queue unfinished.
+#
+# `dataloader_floor_sec_per_epoch` matters because the MLP and Simple CNN are
+# input-bound, not compute-bound -- no GPU makes them faster than the CPU can
+# decode, crop and normalise 45,000 PNGs.
+# =============================================================================
+
+meta:
+  source: estimate
+  confidence: low
+  replaced_by: scripts/plan_budget.py
+  train_set_size: 45000
+  val_set_size: 5000
+  test_set_size: 10000
+  batch_size: 128
+  # Backward pass costs ~2x forward, so a full step is ~3x forward FLOPs.
+  train_fwd_bwd_multiplier: 3.0
+
+devices:
+
+  t4:
+    name: NVIDIA Tesla T4 (16 GB, Kaggle)
+    peak_tflops_fp16: 65.0
+    effective_tflops: 11.0          # ~17% of peak at 32x32 / batch 128
+    dataloader_floor_sec_per_epoch: 14.0   # 4 vCPU on Kaggle, ~3,200 img/s
+    # sec/epoch = max(floor, TFLOPs_epoch / effective) rounded up to published
+    # wall-clock, then + ~2 s for the 5,000-image validation pass.
+    sec_per_epoch:
+      mlp: 14.0                     # compute 0.1 s -> entirely dataloader-bound
+      simple_cnn: 18.0              # compute 3.8 s -> still dataloader-bound
+      resnet18: 32.0                # compute 13.6 s, x2.0 for real-world gap
+      vit: 38.0                     # compute 13.7 s; attention kernels fare worse
+      mlp_mixer: 36.0               # compute 16.7 s
+      convnext_mini: 45.0           # compute 10.9 s, but depthwise 7x7 is memory-bound
+    infer_imgs_per_sec: 4000.0      # for the E5/E6/E7 evaluation passes
+
+  p100:
+    name: NVIDIA Tesla P100 (16 GB, Kaggle legacy)
+    peak_tflops_fp16: 19.0
+    effective_tflops: 7.0           # no tensor cores; fp16 helps less
+    dataloader_floor_sec_per_epoch: 14.0
+    sec_per_epoch:
+      mlp: 14.0
+      simple_cnn: 20.0
+      resnet18: 40.0
+      vit: 52.0
+      mlp_mixer: 48.0
+      convnext_mini: 58.0
+    infer_imgs_per_sec: 3200.0
+
+  rtx3060:
+    name: NVIDIA RTX 3060 (12 GB, desktop)
+    peak_tflops_fp16: 51.0
+    effective_tflops: 14.0
+    dataloader_floor_sec_per_epoch: 10.0
+    sec_per_epoch:
+      mlp: 10.0
+      simple_cnn: 13.0
+      resnet18: 24.0
+      vit: 28.0
+      mlp_mixer: 27.0
+      convnext_mini: 33.0
+    infer_imgs_per_sec: 5500.0
+
+  cpu_i5_1135g7:
+    name: Intel Core i5-1135G7 (4C/8T, this laptop -- NOT a training device)
+    peak_tflops_fp16: 0.0
+    # MEASURED, not estimated: scripts/env_check.py timed a 2048x2048 fp32
+    # matmul at 121.7 GFLOP/s on this machine. Dense matmul is the best case;
+    # convolution and attention achieve roughly 55-65% of it once cache misses
+    # and layout transforms are counted, hence 0.08 rather than 0.12.
+    effective_tflops: 0.08
+    dataloader_floor_sec_per_epoch: 45.0
+    # TFLOPs_epoch / 0.08, with ConvNeXt and ViT penalised further: depthwise
+    # convolution and attention both map poorly onto a small CPU cache.
+    sec_per_epoch:
+      mlp: 70.0                     # 1.0/0.08 = 13 s compute + dataloader floor
+      simple_cnn: 540.0             # 41.3/0.08 = 516 s
+      resnet18: 1900.0              # 150.0/0.08 = 1875 s
+      vit: 2600.0                   # 151.1/0.06 = 2518 s (attention penalty)
+      mlp_mixer: 3100.0             # 183.5/0.06 = 3058 s
+      convnext_mini: 3100.0         # 120.1/0.04 = 3003 s (depthwise penalty)
+    infer_imgs_per_sec: 110.0
+
+# -----------------------------------------------------------------------------
+# E4 fine-tuning at 224x224, batch 64 (spec Section 6 E4).
+#
+# ViT-S/16 at 224 is ~4.6 GFLOPs forward per image and ResNet-50 is ~4.1 -- i.e.
+# roughly 50-100x the per-image cost of anything in the 32x32 showdown. These
+# are per-image training-second estimates anchored on published T4 throughput
+# (~120-130 img/s for both models at 224 with AMP), not on FLOP arithmetic.
+# Remember the spec's tip: upsample 32->224 on the GPU, or the CPU becomes the
+# bottleneck and these numbers are meaningless.
+# -----------------------------------------------------------------------------
+e4_224px:
+  batch_size: 64
+  images_per_epoch: 45000
+  train_imgs_per_sec:
+    t4:            {vit_small_patch16_224: 125.0, resnet50: 120.0}
+    p100:          {vit_small_patch16_224: 80.0,  resnet50: 78.0}
+    rtx3060:       {vit_small_patch16_224: 190.0, resnet50: 180.0}
+    cpu_i5_1135g7: {vit_small_patch16_224: 1.6,   resnet50: 1.8}
+
+# -----------------------------------------------------------------------------
+# Multipliers applied on top of sec_per_epoch.
+# -----------------------------------------------------------------------------
+overheads:
+  # RandAugment is a meaningful CPU cost on top of crop+flip, and E3 runs it on
+  # every training image.
+  strong_augmentation: 1.15
+  # Per-run fixed cost: process start, CUDA context, dataset load, checkpointing.
+  per_run_seconds: 45.0
+  # Parallel efficiency when the queue is split across N GPUs (spec 12.5). Not
+  # 1.0: the two workers contend for the same 4 host CPU cores feeding them.
+  multi_gpu_efficiency: 0.9

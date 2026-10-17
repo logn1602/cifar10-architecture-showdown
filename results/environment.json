@@ -1,0 +1,53 @@
+{
+  "python": {
+    "version": "3.11.9",
+    "executable": "C:\\Users\\shubh\\cifar10-architecture-showdown\\.venv\\Scripts\\python.exe",
+    "in_venv": true
+  },
+  "platform": {
+    "system": "Windows",
+    "release": "10",
+    "version": "10.0.26300",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+    "marketing_name": "Windows 11",
+    "build": 26300
+  },
+  "torch": {
+    "version": "2.14.1+cpu",
+    "cuda_build": null,
+    "cudnn": null
+  },
+  "cuda_available": false,
+  "gpus": [],
+  "bf16_supported": false,
+  "nvidia_smi": "NVIDIA GeForce MX330, 2048 MiB, 582.67",
+  "cpu_count": 8,
+  "cpu_physical": 4,
+  "ram_gb": 7.73,
+  "ram_available_gb": 0.43,
+  "disk_free_gb": 85.01,
+  "disk_total_gb": 455.71,
+  "packages": {
+    "torch": "2.14.1+cpu",
+    "torchvision": "0.29.1+cpu",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "matplotlib": "3.11.2",
+    "seaborn": "0.13.2",
+    "scikit-learn": "1.9.1",
+    "timm": "1.0.30",
+    "pyyaml": "6.0.3",
+    "tqdm": "4.70.1",
+    "tensorboard": "2.21.0",
+    "grad-cam": "1.5.7",
+    "umap-learn": "0.5.12"
+  },
+  "threads": {
+    "torch_num_threads": 4
+  },
+  "gpu_verdict": "unusable",
+  "gpu_verdict_reason": "torch reports no CUDA device. This is a CPU-only PyTorch build (torch.version.cuda is None), which is the expected state for the local CPU workflow.",
+  "recommended_device": "cpu",
+  "recommended_amp_dtype": "none"
+}

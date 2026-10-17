@@ -1,0 +1,25 @@
+# Direct dependencies, pinned to the versions this project was built against.
+# Exact transitive pins (pip freeze) live in requirements-lock.txt.
+#
+# torch and torchvision are DELIBERATELY NOT LISTED HERE.
+# They are platform-specific and must be installed first, from the right index:
+#
+#   local (CPU-only, Windows):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#     -> built against torch==2.14.1+cpu, torchvision==0.29.1+cpu
+#
+#   Kaggle: DO NOT INSTALL. The image already ships a CUDA build, and a stray
+#   pip install can replace it with a CPU wheel that silently kills GPU training.
+
+timm==1.0.30
+numpy==2.4.6
+pandas==3.0.6
+matplotlib==3.11.2
+seaborn==0.13.2
+scikit-learn==1.9.1
+pyyaml==6.0.3
+tqdm==4.70.1
+tensorboard==2.21.0
+grad-cam==1.5.7
+umap-learn==0.5.12
+psutil==7.2.2

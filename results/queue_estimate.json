@@ -1,0 +1,93 @@
+{
+  "device": "cpu_i5_1135g7",
+  "device_name": "Intel Core i5-1135G7 (4C/8T, this laptop -- NOT a training device)",
+  "mode": "full",
+  "num_gpus": 1,
+  "budget_hours": 8.0,
+  "source": "estimate",
+  "items": [
+    {
+      "item": "LR sweep",
+      "runs": 30,
+      "each": "40 epochs",
+      "seconds": 2263350.0,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 628.708,
+      "wall_hours": 628.708
+    },
+    {
+      "item": "E1 main showdown",
+      "runs": 18,
+      "each": "200 epochs",
+      "seconds": 6786810.0,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 1885.225,
+      "wall_hours": 1885.225
+    },
+    {
+      "item": "E2 data-hunger",
+      "runs": 36,
+      "each": "70,200 steps",
+      "seconds": 16343710.909090906,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 4539.92,
+      "wall_hours": 4539.92
+    },
+    {
+      "item": "E3 strong augmentation",
+      "runs": 6,
+      "each": "200 epochs",
+      "seconds": 2593388.181818182,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 720.386,
+      "wall_hours": 720.386
+    },
+    {
+      "item": "E4 pretrained (LR sweep)",
+      "runs": 6,
+      "each": "10 epochs @224px",
+      "seconds": 1753395.0,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 487.054,
+      "wall_hours": 487.054
+    },
+    {
+      "item": "E4 pretrained (main)",
+      "runs": 6,
+      "each": "10 epochs @224px",
+      "seconds": 1753395.0,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 487.054,
+      "wall_hours": 487.054
+    },
+    {
+      "item": "E5 robustness (corruptions)",
+      "runs": 18,
+      "each": "300,000 fwd/run",
+      "seconds": 49090.909090909096,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 13.636,
+      "wall_hours": 13.636
+    },
+    {
+      "item": "E6 patch shuffle",
+      "runs": 18,
+      "each": "60,000 fwd/run",
+      "seconds": 9818.18181818182,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 2.727,
+      "wall_hours": 2.727
+    },
+    {
+      "item": "E7 interpretability",
+      "runs": 6,
+      "each": "12,000 fwd/run (seed 0)",
+      "seconds": 981.8181818181818,
+      "section": "Full mode (spec Sections 3-9)",
+      "gpu_hours": 0.273,
+      "wall_hours": 0.273
+    }
+  ],
+  "total_gpu_hours": 8764.98,
+  "total_wall_hours": 8764.98
+}

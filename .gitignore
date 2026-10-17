@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Python / venv
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Data (spec Phase 0: "Download CIFAR-10 to data/ (add data/ to .gitignore)")
+#
+# NOTE: this includes data/splits/. The 45k/5k split is NOT shipped -- it is
+# regenerated deterministically by src/data.py on every machine (including
+# Kaggle). scripts/check_data.py prints a sha256 fingerprint of the split so
+# you can prove the regenerated split is bit-identical to the local one.
+# ---------------------------------------------------------------------------
+data/
+
+# ---------------------------------------------------------------------------
+# Results: keep the TEXT outputs (tables, figures, metrics), drop the weights.
+#
+# Checkpoints are excluded by file pattern rather than by directory, because a
+# .gitignore negation (!) cannot re-include a file whose parent directory is
+# itself excluded. So we never exclude results/runs/ as a directory -- only the
+# *.pt files inside it.
+# ---------------------------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# TensorBoard event files: large, binary, and fully reconstructible from
+# history.csv. Excluding the directory outright is fine (nothing inside is
+# wanted).
+results/tb/
+
+# Crash logs from the unattended queue (spec 12.5) -- noisy, machine-specific.
+results/failures/
+results/run_all.log
+*.log
+
+# Archives produced by the Kaggle packaging cell.
+*.zip
+*.tar.gz
+
+# ---------------------------------------------------------------------------
+# OS / editor cruft
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
