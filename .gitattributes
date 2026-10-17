@@ -1,0 +1,17 @@
+# Normalise line endings to LF in the repository.
+#
+# This repo is written on Windows but runs on Linux (Kaggle). Pinning LF keeps
+# the two checkouts byte-identical, which matters because the Kaggle run is
+# meant to reproduce the local split exactly -- and it silences git's
+# "LF will be replaced by CRLF" warnings on every commit.
+* text=auto eol=lf
+
+# Notebooks are JSON; diffing them is noisy but they are still text.
+*.ipynb text eol=lf
+
+# Binary: never touch these.
+*.png binary
+*.pt binary
+*.pth binary
+*.zip binary
+*.tar.gz binary
