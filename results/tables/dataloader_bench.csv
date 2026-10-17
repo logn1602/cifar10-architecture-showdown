@@ -1,0 +1,4 @@
+augmentation,num_workers,batch_size,batches,repeat,imgs_per_sec,sec_per_batch,projected_sec_per_epoch_45k,status,error
+standard,0,128,40,0,2872.7,0.0446,15.7,ok,
+standard,2,128,40,0,5125.2,0.025,8.8,ok,
+standard,4,128,40,0,8350.1,0.0153,5.4,ok,

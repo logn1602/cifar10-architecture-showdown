@@ -284,7 +284,12 @@ def figure_augmentations(cfg: dict, out_path: Path, dpi: int) -> None:
     n_draws = 4
     n_cols = 1 + 2 * n_draws
 
-    fig, axes = plt.subplots(len(picks), n_cols, figsize=(1.35 * n_cols, 1.45 * len(picks)))
+    # constrained_layout, not tight_layout: tight_layout reserves a band for the
+    # suptitle via `rect` but does not know how tall the title actually is, so a
+    # 4-line title leaves a large dead gap above the grid.
+    fig, axes = plt.subplots(len(picks), n_cols,
+                             figsize=(1.3 * n_cols, 1.38 * len(picks)),
+                             layout="constrained")
     set_seed(0)
     for r, idx in enumerate(picks):
         img, label = base_train[idx]
@@ -312,9 +317,8 @@ def figure_augmentations(cfg: dict, out_path: Path, dpi: int) -> None:
         "standard: RandomCrop(32, pad=4) -> RandomHorizontalFlip -> ToTensor -> Normalize\n"
         "strong:   standard + RandAugment(2, 9) before ToTensor, RandomErasing(p=0.25) after Normalize\n"
         "(Mixup/CutMix are batch-level and applied in the training loop, not shown here)",
-        fontsize=8.5, y=1.0,
+        fontsize=8.5,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.88))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
@@ -368,7 +372,7 @@ def figure_mixup_cutmix(cfg: dict, out_path: Path, dpi: int) -> None:
                         prob=strong["mixup_cutmix_prob"])
 
     n_rows = 3
-    fig, axes = plt.subplots(n_rows, 8, figsize=(13, 1.75 * n_rows))
+    fig, axes = plt.subplots(n_rows, 8, figsize=(13, 1.75 * n_rows), layout="constrained")
     for r in range(n_rows):
         x, y_a, y_b, lam = mixer(batch.clone(), ys)
         for c in range(8):
@@ -381,7 +385,6 @@ def figure_mixup_cutmix(cfg: dict, out_path: Path, dpi: int) -> None:
                               va="center", labelpad=26)
     fig.suptitle("Mixup / CutMix (batch-level, E3 only). For CutMix, the pasted box area "
                  "equals 1-lam by construction.", fontsize=9)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 

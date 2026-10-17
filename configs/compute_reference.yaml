@@ -71,7 +71,13 @@ devices:
     name: NVIDIA Tesla T4 (16 GB, Kaggle)
     peak_tflops_fp16: 65.0
     effective_tflops: 11.0          # ~17% of peak at 32x32 / batch 128
-    dataloader_floor_sec_per_epoch: 14.0   # 4 vCPU on Kaggle, ~3,200 img/s
+    # 14 s/epoch assumes ~3,200 img/s from Kaggle's 4 vCPU. Deliberately
+    # conservative: scripts/bench_dataloader.py measured 8,350 img/s (5.4
+    # s/epoch) on this laptop's 4 physical cores, so the real Kaggle floor is
+    # probably nearer 6-9 s. Over-estimating the floor only inflates the two
+    # cheapest models (MLP, Simple CNN) and keeps the unattended budget safe --
+    # plan_budget.py measures it for real on the night.
+    dataloader_floor_sec_per_epoch: 14.0
     # sec/epoch = max(floor, TFLOPs_epoch / effective) rounded up to published
     # wall-clock, then + ~2 s for the 5,000-image validation pass.
     sec_per_epoch:

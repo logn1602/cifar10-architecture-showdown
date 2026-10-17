@@ -61,10 +61,11 @@ for early stopping. See [`configs/base.yaml`](configs/base.yaml), which encodes 
 
 | | |
 |---|---|
-| CPU | Intel Core i5-1135G7, 4C/8T |
-| RAM | 7.7 GB |
+| CPU | Intel Core i5-1135G7, 4C/8T — **121.7 GFLOP/s** measured (fp32, 2048² matmul) |
+| RAM | 7.7 GB (often <1 GB free — see the note below) |
 | GPU | **NVIDIA MX330, 2 GB VRAM** — not viable |
-| Local PyTorch | CPU-only build |
+| Local PyTorch | 2.14.1+cpu / torchvision 0.29.1+cpu |
+| DataLoader | **8,350 img/s at `num_workers=4`** (5.4 s per 45k epoch) |
 
 An MX330 has 2 GB of VRAM. ResNet-18 at batch 128 with AMP needs roughly 2.5–3 GB for activations
 alone on 32×32 input, and ViT/ConvNeXt need more — so the protocol's batch size cannot run here at
@@ -78,6 +79,13 @@ job (>100 GPU-hours) — see `results/tables/compute_estimate.md`.
 
 See [`docs/KAGGLE.md`](docs/KAGGLE.md) for the step-by-step, and
 [`kaggle_runner.ipynb`](kaggle_runner.ipynb) for the runner notebook.
+
+> **Memory note.** `num_workers=4` is the fastest setting *when RAM is free*, but on Windows each
+> worker is a spawned process that gets its own copy of the 153 MB in-memory CIFAR-10 array. With
+> under ~1 GB free this machine thrashes hard (observed: 7,300 page-faults/sec, 9 s of CPU progress
+> per 2 min of wall-clock). If a script crawls, re-run it with `--num-workers 0` — single-process
+> iteration still manages 2,873 img/s and never pages. This is a local-only concern; Kaggle has
+> ~30 GB of RAM.
 
 ---
 
