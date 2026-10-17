@@ -1,0 +1,7 @@
+# Simple CNN -- spec 5.2. Target ~1.1M params.
+model:
+  name: simple_cnn
+  channels: [64, 128, 256]        # 32x32 -> 16x16 -> 8x8 -> 4x4
+  blocks_per_stage: 2             # (Conv3x3 -> BN -> ReLU) x2, then MaxPool
+  dropout: 0.3
+lr: null

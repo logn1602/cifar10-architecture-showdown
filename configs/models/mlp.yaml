@@ -1,0 +1,8 @@
+# MLP -- spec 5.1. Target ~3.8M params.
+model:
+  name: mlp
+  hidden_dims: [1024, 512, 256]   # 3072 -> 1024 -> 512 -> 256 -> 10
+  dropout: 0.2
+# Learning rate is the ONLY per-model tuning the protocol allows.
+# Filled in by the Phase 3 LR sweep; null until then.
+lr: null

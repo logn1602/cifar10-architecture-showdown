@@ -1,0 +1,13 @@
+# MLP-Mixer -- spec 5.5. Target ~9-10M params.
+# Same patching as ViT, but no cls token and no positional embedding.
+model:
+  name: mlp_mixer
+  img_size: 32
+  patch_size: 4
+  embed_dim: 384
+  depth: 8
+  token_hidden: 192               # token-mixing MLP: 64 -> 192 -> 64
+  channel_hidden: 1536            # channel-mixing MLP: 384 -> 1536 -> 384
+  drop_rate: 0.0
+  drop_path_rate: 0.1
+lr: null

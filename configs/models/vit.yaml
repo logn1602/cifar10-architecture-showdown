@@ -1,0 +1,15 @@
+# Vision Transformer -- spec 5.4. Target ~8-9M params.
+# patch 4 -> 8x8 = 64 patch tokens + 1 cls token = 65.
+# 6 heads x head_dim 64 = 384.
+model:
+  name: vit
+  img_size: 32
+  patch_size: 4
+  embed_dim: 384
+  depth: 7
+  num_heads: 6
+  mlp_ratio: 2.0                  # 384 -> 768 -> 384
+  drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.1             # linearly increasing over depth
+lr: null

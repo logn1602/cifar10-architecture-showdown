@@ -1,0 +1,9 @@
+# ResNet-18, CIFAR variant -- spec 5.3. Target ~11.2M params.
+# Stem is 3x3 stride 1 with NO max-pool: the ImageNet stem would reduce a
+# 32x32 image to 8x8 before the first residual block.
+model:
+  name: resnet18
+  layers: [2, 2, 2, 2]
+  channels: [64, 128, 256, 512]
+  zero_init_residual: true        # each block starts as an exact identity
+lr: null

@@ -1,0 +1,10 @@
+# ConvNeXt-mini -- spec 5.6. Target ~8-9M params.
+# Stem is 3x3 stride 1 (not the usual 4x4 patchify, which would drop a 32x32
+# image straight to 8x8). Stages run 32 -> 16 -> 8 -> 4.
+model:
+  name: convnext_mini
+  dims: [64, 128, 256, 512]
+  depths: [2, 2, 6, 2]
+  drop_path_rate: 0.1             # linear over all 12 blocks, not per stage
+  layer_scale_init: 1.0e-6        # LayerScale gamma; note the decimal point
+lr: null
