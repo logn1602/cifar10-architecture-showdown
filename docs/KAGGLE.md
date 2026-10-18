@@ -100,7 +100,7 @@ You can close the tab immediately. Progress is visible under the notebook's **Ve
 
 | Stage | Approx. wall-clock on 2× T4 |
 |---|---|
-| Setup, install, data checks | 5–10 min |
+| Setup, install, data checks, Phase 2 model gate | 5–10 min |
 | Budget planner | 3–5 min |
 | LR sweep (18 runs × 10 epochs) | ~1.0 h |
 | E1 main showdown (6 × 100 epochs) | ~2.9 h |

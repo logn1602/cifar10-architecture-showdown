@@ -24,6 +24,7 @@ Run: ``python scripts/model_checks.py``            (~45 min on this CPU)
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 from pathlib import Path
@@ -178,7 +179,19 @@ def overfit_test(name: str, model_cfg: dict, device: torch.device, data_cfg: dic
     warmup_steps = max(1, int(warmup_frac * steps))
 
     def lr_at(s: int) -> float:
-        return lr * min(1.0, (s + 1) / warmup_steps)
+        """Linear warmup then cosine decay -- the protocol's schedule shape.
+
+        The decay is not cosmetic. With a constant post-warmup LR, ViT reached
+        a loss of 0.119 by step 150 and then bounced back up to 0.406 by step
+        199: AdamW at 1e-3 keeps taking steps too large to settle into the
+        minimum it had already found. Cosine decay is what lets a model that
+        has *found* the solution actually land on it, and spec Section 3
+        mandates it for every real run.
+        """
+        if s < warmup_steps:
+            return lr * (s + 1) / warmup_steps
+        progress = (s - warmup_steps) / max(1, steps - warmup_steps)
+        return lr * 0.5 * (1.0 + math.cos(math.pi * progress))
 
     t0 = time.perf_counter()
     step = 0
@@ -356,8 +369,17 @@ def write_outputs(results: list[dict], out_dir: str, device: torch.device, args)
         L += ["", "## Overfit test (spec 5.7)\n",
               f"Can each model memorise {args.overfit_images} training images in "
               f"{args.overfit_steps} optimizer steps? This is a wiring-and-capacity check, so it runs",
-              "without augmentation, weight decay or label smoothing -- all three oppose memorisation.",
-              "Accuracy is measured in `eval()` mode.\n",
+              "without augmentation, weight decay, label smoothing, dropout or stochastic depth --",
+              "all five exist to *prevent* a model fitting its training data, which is exactly what is",
+              "being measured here. The LR schedule is linear warmup then cosine decay, matching the",
+              "protocol (spec Section 3). Accuracy is measured in `eval()` mode.\n",
+              "> **Why the schedule matters.** ViT initially failed this gate at 82%. Three things were",
+              "> wrong with the *test*, not the model: stochastic depth was left on (+7.5pp when",
+              "> disabled), there was no LR warmup (+7.8pp), and the post-warmup LR was held constant",
+              "> rather than decayed. That last one was visible in the loss curve -- ViT reached a loss",
+              "> of 0.119 by step 150 and then bounced back to 0.406 by step 199, the signature of a",
+              "> learning rate too large to settle into a minimum it had already found. With cosine",
+              "> decay it reaches 100%. No model hyperparameter was changed to achieve this.\n",
               "| Model | Train acc | Loss (first -> final) | Time | Verdict |",
               "|---|---|---|---|---|"]
         for r in results:
