@@ -150,6 +150,7 @@ Then verify three things before trusting any number:
 | Symptom | Cause | Fix |
 |---|---|---|
 | `AssertionError: No GPU!` | Accelerator set to None/CPU | Settings → Accelerator → GPU T4 × 2, then restart the session |
+| `[ WARN ] FLOPs counted … not counted, recorded as null` | This PyTorch build's `FlopCounterMode` cannot count the models (it failed for all six on Kaggle's Python 3.10 image) | Nothing — it is a warning, not a gate, and the line says why. FLOPs depend only on the architecture and input size, so the local counts in `results/tables/model_summary.md` apply; the Kaggle copy of that file will show `n/a` |
 | "Only 1 GPU allocated" warning | Kaggle gave a single T4 (quota or availability) | Restart the session; if it persists, the core will overrun 8 h — lower `BUDGET_HOURS` and accept fewer upgrades |
 | `pip install` fails, no network | Internet toggle off | Settings → Internet → On. Note this also blocks the CIFAR-10 download |
 | `torch lost CUDA after the pip install` | Something pulled a CPU torch wheel | Restart the session. Never add `torch` to the install list — Kaggle ships its own CUDA build |

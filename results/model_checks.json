@@ -1,5 +1,9 @@
 {
   "device": "cpu",
+  "torch": "2.14.1+cpu",
+  "python": "3.11.9",
+  "gates_passed": true,
+  "warnings": [],
   "results": [
     {
       "model": "mlp",
@@ -11,31 +15,38 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "3,807,242 vs target ~3,800,000 (+0.2%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "0.008 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 11 tensors reached"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 12.0s, reg off: dropout=0.2"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 10.1s, reg off: dropout=0.2"
         }
       },
       "params": 3807242,
       "flops": 7607296,
+      "flops_error": null,
       "timm_crosscheck": "n/a",
       "overfit": {
         "accuracy": 1.0,
@@ -43,7 +54,7 @@
         "first_loss": 2.774251699447632,
         "final_loss": 0.002489979611709714,
         "steps": 200,
-        "seconds": 12.039106700001867,
+        "seconds": 10.148939500002598,
         "n_images": 256,
         "regularization_disabled": [
           "dropout=0.2"
@@ -70,31 +81,38 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "1,148,874 vs target ~1,100,000 (+4.4%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "0.306 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 20 tensors reached"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 1m 54s, reg off: dropout=0.3"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 1m 51s, reg off: dropout=0.3"
         }
       },
       "params": 1148874,
       "flops": 305533952,
+      "flops_error": null,
       "timm_crosscheck": "n/a",
       "overfit": {
         "accuracy": 1.0,
@@ -102,7 +120,7 @@
         "first_loss": 2.3000786304473877,
         "final_loss": 0.011030998080968857,
         "steps": 200,
-        "seconds": 113.56860790000064,
+        "seconds": 111.22853000000032,
         "n_images": 256,
         "regularization_disabled": [
           "dropout=0.3"
@@ -129,35 +147,43 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "11,173,962 vs target ~11,200,000 (-0.2%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "1.111 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 62 tensors reached"
         },
         "timm parameter cross-check": {
           "passed": true,
+          "gate": true,
           "detail": "timm 11,181,642 vs ours 11,173,962 (diff 7,680, as expected: ImageNet 7x7 stem)"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 6m 44s"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 7m 53s"
         }
       },
       "params": 11173962,
       "flops": 1110845440,
+      "flops_error": null,
       "timm_crosscheck": "timm 11,181,642 vs ours 11,173,962 (diff 7,680, as expected: ImageNet 7x7 stem)",
       "overfit": {
         "accuracy": 1.0,
@@ -165,7 +191,7 @@
         "first_loss": 2.286142587661743,
         "final_loss": 0.005264773033559322,
         "steps": 200,
-        "seconds": 404.12526990000333,
+        "seconds": 473.28392789999634,
         "n_images": 256,
         "regularization_disabled": [],
         "warmup_steps": 20,
@@ -190,31 +216,38 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "8,335,882 vs target ~8,500,000 (-1.9%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "1.121 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 92 tensors reached"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 7m 37s, reg off: drop_path_rate=0.1"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 7m 59s, reg off: drop_path_rate=0.1"
         }
       },
       "params": 8335882,
       "flops": 1121273856,
+      "flops_error": null,
       "timm_crosscheck": "n/a",
       "overfit": {
         "accuracy": 1.0,
@@ -222,7 +255,7 @@
         "first_loss": 2.357968807220459,
         "final_loss": 0.00895944144576788,
         "steps": 200,
-        "seconds": 456.81071409999277,
+        "seconds": 479.0565843000004,
         "n_images": 256,
         "regularization_disabled": [
           "drop_path_rate=0.1"
@@ -249,31 +282,38 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "9,686,922 vs target ~9,700,000 (-0.1%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "1.361 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 102 tensors reached"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 7m 54s, reg off: drop_path_rate=0.1"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 9m 26s, reg off: drop_path_rate=0.1"
         }
       },
       "params": 9686922,
       "flops": 1361321472,
+      "flops_error": null,
       "timm_crosscheck": "n/a",
       "overfit": {
         "accuracy": 1.0,
@@ -281,7 +321,7 @@
         "first_loss": 2.323564291000366,
         "final_loss": 0.00937427207827568,
         "steps": 200,
-        "seconds": 474.27338609998696,
+        "seconds": 566.0063163999948,
         "n_images": 256,
         "regularization_disabled": [
           "drop_path_rate=0.1"
@@ -308,31 +348,38 @@
       "checks": {
         "forward (2,3,32,32) -> (2,10)": {
           "passed": true,
+          "gate": true,
           "detail": "(2, 10)"
         },
         "parameter count near target": {
           "passed": true,
+          "gate": true,
           "detail": "8,536,458 vs target ~8,500,000 (+0.4%)"
         },
-        "FLOPs counted": {
+        "FLOPs counted (measurement, not a gate)": {
           "passed": true,
+          "gate": false,
           "detail": "0.890 GFLOPs/image (forward, batch 1)"
         },
         "eval() is deterministic": {
           "passed": true,
+          "gate": true,
           "detail": "identical"
         },
         "every parameter gets a gradient": {
           "passed": true,
+          "gate": true,
           "detail": "all 128 tensors reached"
         },
         "overfits 256 images in 200 steps": {
           "passed": true,
-          "detail": "train acc 100.0% (threshold 98%), 10m 49s, reg off: drop_path_rate=0.1"
+          "gate": true,
+          "detail": "train acc 100.0% (threshold 98%), 11m 28s, reg off: drop_path_rate=0.1"
         }
       },
       "params": 8536458,
       "flops": 889694208,
+      "flops_error": null,
       "timm_crosscheck": "n/a",
       "overfit": {
         "accuracy": 1.0,
@@ -340,7 +387,7 @@
         "first_loss": 2.397360324859619,
         "final_loss": 0.0030810171738266945,
         "steps": 200,
-        "seconds": 649.1886192000093,
+        "seconds": 688.1011464000039,
         "n_images": 256,
         "regularization_disabled": [
           "drop_path_rate=0.1"

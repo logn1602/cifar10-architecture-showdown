@@ -4,6 +4,7 @@ The notebook is generated, never hand-edited. Edit the cells below, then:
 
     python scripts/make_kaggle_notebook.py           # rewrite the notebook, then verify it
     python scripts/make_kaggle_notebook.py --check   # verify the notebook on disk only
+    python scripts/make_kaggle_notebook.py --check --python <a python3.10>   # Kaggle's parser
 
 Every cell is a raw string (r'''...'''), so its text reaches the notebook byte
 for byte: nothing is un-escaped on the way, and print("\n" + "!" * 70) stays
@@ -521,12 +522,13 @@ def render(nb: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def py_compile_cells(path: Path) -> list[tuple[int, bool, str]]:
+def py_compile_cells(path: Path, python: str = sys.executable) -> list[tuple[int, bool, str]]:
     """Extract every code cell of the notebook at ``path`` and py_compile it.
 
     Returns ``(cell index, compiled ok, error text)`` per code cell. The cells
     are read back from the file on disk -- not from memory -- so this checks
-    exactly what Kaggle will execute.
+    exactly what Kaggle will execute. ``python`` picks the interpreter whose
+    parser is used, e.g. a 3.10 to match Kaggle's kernel.
     """
     nb = json.loads(path.read_text(encoding="utf-8"))
     results = []
@@ -536,15 +538,18 @@ def py_compile_cells(path: Path) -> list[tuple[int, bool, str]]:
                 continue
             src = Path(tmp) / f"cell_{i:02d}.py"
             src.write_text("".join(cell["source"]), encoding="utf-8")
-            proc = subprocess.run([sys.executable, "-m", "py_compile", str(src)],
+            proc = subprocess.run([python, "-m", "py_compile", str(src)],
                                   capture_output=True, text=True)
             results.append((i, proc.returncode == 0, (proc.stderr or proc.stdout).strip()))
     return results
 
 
-def verify(path: Path) -> bool:
+def verify(path: Path, python: str = sys.executable) -> bool:
+    version = subprocess.run([python, "-c", "import sys; print(sys.version.split()[0])"],
+                             capture_output=True, text=True).stdout.strip() or "?"
+    print(f"compiling every code cell, as extracted from the notebook file, with Python {version}:")
     ok = True
-    for i, passed, err in py_compile_cells(path):
+    for i, passed, err in py_compile_cells(path, python):
         print(f"  cell {i:2d}  py_compile {'OK' if passed else 'FAILED'}")
         if not passed:
             ok = False
@@ -556,6 +561,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Generate and verify kaggle_runner.ipynb.")
     ap.add_argument("--check", action="store_true",
                     help="do not write; verify the notebook on disk is current and compiles")
+    ap.add_argument("--python", default=sys.executable,
+                    help="interpreter whose parser compiles the cells (default: this one); "
+                         "e.g. a Python 3.10 to match Kaggle's kernel")
     args = ap.parse_args()
 
     expected = render(build())
@@ -569,8 +577,7 @@ def main() -> int:
         stale = False
         print(f"wrote {rel} ({len(CELLS)} cells)")
 
-    print("compiling every code cell, as extracted from the notebook file:")
-    compiled = verify(NOTEBOOK)
+    compiled = verify(NOTEBOOK, args.python)
     print("ALL CODE CELLS COMPILE" if compiled else "SOME CODE CELLS DO NOT COMPILE")
     return 0 if compiled and not stale else 1
 

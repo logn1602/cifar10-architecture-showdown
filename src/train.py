@@ -62,7 +62,9 @@ try:  # works for `python -m src.train` and `import src.train`
     )
     from src.evaluate import autocast_context, evaluate
     from src.models import MODEL_META, build_model
-    from src.profile import count_flops, count_params, measure_inference, peak_memory_mb, reset_peak_memory
+    from src.profile import (
+        count_params, measure_inference, peak_memory_mb, reset_peak_memory, try_count_flops,
+    )
     from src.utils import PROJECT_ROOT, ensure_dir, get_logger, human_time, load_json, save_json, set_seed
 except ImportError:  # works for `python src/train.py`
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -72,7 +74,7 @@ except ImportError:  # works for `python src/train.py`
     from src.evaluate import autocast_context, evaluate  # noqa: E402
     from src.models import MODEL_META, build_model  # noqa: E402
     from src.profile import (  # noqa: E402
-        count_flops, count_params, measure_inference, peak_memory_mb, reset_peak_memory,
+        count_params, measure_inference, peak_memory_mb, reset_peak_memory, try_count_flops,
     )
     from src.utils import (  # noqa: E402
         PROJECT_ROOT, ensure_dir, get_logger, human_time, load_json, save_json, set_seed,
@@ -657,7 +659,9 @@ def train(
         np.savez_compressed(out / "test_outputs.npz", targets=test_res["targets"],
                             preds=test_res["preds"], probs=test_res["probs"])
 
-    flops = count_flops(model, device, image_size=minfo["image_size"])
+    flops, flops_error = try_count_flops(model, device, image_size=minfo["image_size"])
+    if flops is None:  # a measurement, never a reason to fail a finished run
+        log.warning("FLOPs not counted (%s); metrics.json records flops: null", flops_error)
     try:
         infer_ips = measure_inference(model, device, amp_dtype, image_size=32,
                                       batch_size=64 if input_fn is not None else 256,
@@ -681,7 +685,7 @@ def train(
                           if test_res else {}),
         "confusion_matrix": test_res["confusion_matrix"] if test_res else None,
         "ece": test_res["ece"] if test_res else None,
-        "params": count_params(model), "flops": flops,
+        "params": count_params(model), "flops": flops, "flops_error": flops_error,
         "train_time_sec": state["train_time_sec"],
         "wall_time_sec": state["wall_time_sec"],
         "sec_per_epoch": state["wall_time_sec"] / max(data_epochs, 1e-9),

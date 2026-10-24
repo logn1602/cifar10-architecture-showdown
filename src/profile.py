@@ -14,13 +14,15 @@ files from inside ``src/`` with ``python src/x.py`` and then use cProfile.
 from __future__ import annotations
 
 import time
+import traceback
+from pathlib import Path
 from typing import Callable
 
 import torch
 import torch.nn as nn
 
-__all__ = ["count_params", "count_flops", "measure_inference", "reset_peak_memory",
-           "peak_memory_mb"]
+__all__ = ["count_params", "count_flops", "try_count_flops", "measure_inference",
+           "reset_peak_memory", "peak_memory_mb"]
 
 
 def count_params(model: nn.Module, trainable_only: bool = True) -> int:
@@ -28,36 +30,57 @@ def count_params(model: nn.Module, trainable_only: bool = True) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad or not trainable_only)
 
 
-@torch.no_grad()
-def count_flops(model: nn.Module, device: torch.device, image_size: int = 32) -> int | None:
+def try_count_flops(model: nn.Module, device: torch.device, image_size: int = 32
+                    ) -> tuple[int | None, str | None]:
     """Forward FLOPs for a single image, via ``FlopCounterMode``.
 
+    Returns ``(flops, None)``, or ``(None, reason)`` when counting fails.
     Counts matmul/conv FLOPs only -- elementwise work (GELU, LayerNorm, softmax)
     is not counted, which is the convention every published FLOP number for
-    these architectures follows. Returns None rather than raising: a missing
-    FLOP count must never take down a finished training run.
+    these architectures follows.
+
+    FLOP counting is a measurement, never a gate. ``FlopCounterMode``'s API and
+    op coverage vary across PyTorch builds (it failed for all six models on one
+    Kaggle image), and the count depends only on the architecture and the input
+    size, so a count taken on any other machine applies unchanged. Callers
+    therefore record ``None`` and log ``reason`` rather than failing. Nothing
+    in here may raise.
     """
+    was_training = model.training
     try:
         from torch.utils.flop_counter import FlopCounterMode
-    except ImportError:
-        return None
 
-    was_training = model.training
-    model.eval()
-    x = torch.randn(1, 3, image_size, image_size, device=device)
-    try:
-        counter = FlopCounterMode(display=False)
-    except TypeError:  # older/newer signature
-        counter = FlopCounterMode()
-    try:
-        with counter:
+        model.eval()
+        x = torch.randn(1, 3, image_size, image_size, device=device)
+        try:
+            counter = FlopCounterMode(display=False)
+        except TypeError:  # older/newer signature
+            counter = FlopCounterMode()
+        with torch.no_grad(), counter:
             model(x)
-        return int(counter.get_total_flops())
-    except Exception:
-        return None
+        return int(counter.get_total_flops()), None
+    except Exception as exc:
+        return None, _describe(exc)
     finally:
         if was_training:
             model.train()
+
+
+def count_flops(model: nn.Module, device: torch.device, image_size: int = 32) -> int | None:
+    """Like :func:`try_count_flops`, value only: None when counting failed."""
+    return try_count_flops(model, device, image_size)[0]
+
+
+def _describe(exc: BaseException, limit: int = 400) -> str:
+    """``"Type: message (at file:line in func)"`` -- enough to diagnose remotely."""
+    text = f"{type(exc).__name__}: {exc}".strip()
+    if len(text) > limit:
+        text = text[:limit] + " ..."
+    tb = traceback.extract_tb(exc.__traceback__)
+    if tb:
+        frame = tb[-1]
+        text += f" (at {Path(frame.filename).name}:{frame.lineno} in {frame.name})"
+    return text
 
 
 @torch.no_grad()

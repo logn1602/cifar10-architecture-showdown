@@ -247,13 +247,19 @@ def smoke_one(name: str, cfg: dict, out_root: Path, args) -> dict:
     checks.append(("TensorBoard events written", tb_ok, _rel(tb_dir)))
     absent = [k for k in SPEC_METRIC_KEYS if k not in m]
     checks.append(("metrics.json has every spec key", not absent, f"missing: {absent}" if absent else ""))
-    nulls = [k for k in ("test_acc", "params", "flops", "ece", "infer_imgs_per_sec")
-             if m.get(k) is None]
+    # FLOPs are deliberately not in this list: counting them is a measurement,
+    # not a gate (see src.profile.try_count_flops). On a PyTorch build where
+    # FlopCounterMode fails, metrics.json records null and this test warns.
+    nulls = [k for k in ("test_acc", "params", "ece", "infer_imgs_per_sec") if m.get(k) is None]
     checks.append(("core metrics non-null", not nulls, f"null: {nulls}" if nulls else ""))
     checks.append(("test acc above chance", (m.get("test_acc") or 0) > 0.15,
                    f"test_acc={m.get('test_acc')}"))
+    warnings = []
+    if m.get("flops") is None:
+        warnings.append("FLOPs not counted, recorded as null (not a gate): "
+                        f"{m.get('flops_error') or 'reason not recorded'}")
 
-    return {"model": name, "checks": checks, "seconds": secs,
+    return {"model": name, "checks": checks, "warnings": warnings, "seconds": secs,
             "test_acc": m.get("test_acc"), "best_val_acc": m.get("best_val_acc"),
             "train_imgs_per_sec": m.get("train_imgs_per_sec"),
             "sec_per_epoch": m.get("sec_per_epoch"),
@@ -335,6 +341,8 @@ def main() -> int:
             all_ok &= ok
             print(f"  [{'PASS' if ok else 'FAIL'}] {label}" + (f"  ({detail})" if detail and not ok else
                                                                (f"  {detail}" if detail else "")))
+        for w in r.get("warnings", []):
+            print(f"  [WARN] {w}")
         print(f"  -> {human_time(r['seconds'])}", flush=True)
 
     if not args.skip_extra:
@@ -364,7 +372,9 @@ def main() -> int:
         ta = f"{r['test_acc']:.3f}" if r.get("test_acc") is not None else "-"
         ips = f"{r['train_imgs_per_sec']:.0f}" if r.get("train_imgs_per_sec") else "-"
         print(f"{r['model']:<15}{ls:>20}{va:>10}{ta:>10}{ips:>9}{human_time(r['seconds']):>9}")
-    print(f"\n{n_ok}/{n} checks passed -- {'ALL PASS' if all_ok else 'FAILURES ABOVE'}")
+    n_warn = sum(len(r.get("warnings", [])) for r in results)
+    print(f"\n{n_ok}/{n} checks passed -- {'ALL PASS' if all_ok else 'FAILURES ABOVE'}"
+          + (f" ({n_warn} warning(s) above, not gating)" if n_warn else ""))
     return 0 if all_ok else 1
 
 

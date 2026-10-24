@@ -17,6 +17,10 @@ The overfit test is the real gate: a model that cannot memorise 256 images has
 a bug, and no amount of training will reveal which one. Running this on CPU
 before committing 8 GPU-hours is the cheapest insurance in the project.
 
+Every check is a hard gate (exit code 1) except FLOP counting, which is a
+measurement: when ``FlopCounterMode`` fails on a given PyTorch build, the
+reason is printed as a warning and the count is recorded as null.
+
 Run: ``python scripts/model_checks.py``            (~45 min on this CPU)
      ``python scripts/model_checks.py --skip-overfit``   (seconds)
 """
@@ -39,7 +43,7 @@ from src.data import build_datasets  # noqa: E402
 from src.models import (  # noqa: E402
     MODEL_ORDER, build_model, count_parameters, get_meta,
 )
-from src.profile import count_flops  # noqa: E402
+from src.profile import try_count_flops  # noqa: E402
 from src.utils import (  # noqa: E402
     ensure_dir, human_time, load_config, save_json, set_seed,
 )
@@ -225,7 +229,8 @@ def run(args) -> int:
           f"batch {args.batch_size}, lr {args.lr}\n")
 
     results: list[dict] = []
-    failures: list[str] = []
+    failures: list[str] = []      # gates: any entry here exits non-zero
+    warnings: list[str] = []      # measurements that could not be taken: reported, not gating
 
     for name in names:
         print("-" * 78)
@@ -238,11 +243,12 @@ def run(args) -> int:
         model = build_model(name, model_cfg).to(device)
         row: dict = {"model": name, **meta, "checks": {}}
 
-        def record(label: str, ok: bool, detail: str = "") -> None:
-            row["checks"][label] = {"passed": bool(ok), "detail": detail}
-            print(f"  [{'  ok  ' if ok else ' FAIL '}] {label}" + (f"  --  {detail}" if detail else ""))
+        def record(label: str, ok: bool, detail: str = "", gate: bool = True) -> None:
+            row["checks"][label] = {"passed": bool(ok), "gate": gate, "detail": detail}
+            tag = "  ok  " if ok else (" FAIL " if gate else " WARN ")
+            print(f"  [{tag}] {label}" + (f"  --  {detail}" if detail else ""))
             if not ok:
-                failures.append(f"{name}: {label} ({detail})")
+                (failures if gate else warnings).append(f"{name}: {label} ({detail})")
 
         # 1. forward shape
         model.eval()
@@ -258,11 +264,18 @@ def run(args) -> int:
         record("parameter count near target", within,
                f"{n_params:,} vs target ~{target:,.0f} ({100*(n_params-target)/target:+.1f}%)")
 
-        # 3. FLOPs
-        flops = count_flops(model, device)
+        # 3. FLOPs -- a measurement, not a gate. FlopCounterMode varies across
+        # PyTorch builds (it failed for every model on one Kaggle image), and a
+        # FLOP count depends only on the architecture and input size, so a count
+        # from any other machine applies. A failure is logged and recorded as
+        # null; it never fails this script.
+        flops, flops_error = try_count_flops(model, device)
         row["flops"] = flops
-        record("FLOPs counted", flops is not None,
-               f"{flops/1e9:.3f} GFLOPs/image (forward, batch 1)" if flops else "FlopCounterMode failed")
+        row["flops_error"] = flops_error
+        record("FLOPs counted (measurement, not a gate)", flops is not None,
+               f"{flops / 1e9:.3f} GFLOPs/image (forward, batch 1)" if flops is not None
+               else f"not counted, recorded as null -- {flops_error}",
+               gate=False)
 
         # 4. eval determinism
         ok, detail = check_eval_determinism(model, device)
@@ -300,25 +313,33 @@ def run(args) -> int:
         results.append(row)
         print()
 
-    write_outputs(results, args.out_dir, device, args)
+    write_outputs(results, args.out_dir, device, args, failures, warnings)
 
     print("=" * 78)
+    if warnings:
+        print(f"  WARNINGS ({len(warnings)}, not gating):")
+        for w in warnings:
+            print(f"    - {w}")
     if failures:
-        print(f"  RESULT: {len(failures)} CHECK(S) FAILED")
+        print(f"  RESULT: {len(failures)} GATING CHECK(S) FAILED")
         for f in failures:
             print(f"    - {f}")
         print("=" * 78)
         return 1
-    n = sum(len(r["checks"]) for r in results)
-    print(f"  RESULT: all {n} checks passed across {len(results)} models")
+    n = sum(1 for r in results for c in r["checks"].values() if c["gate"])
+    print(f"  RESULT: all {n} gating checks passed across {len(results)} models"
+          + (f" ({len(warnings)} warning(s) above, not gating)" if warnings else ""))
     print("=" * 78)
     return 0
 
 
-def write_outputs(results: list[dict], out_dir: str, device: torch.device, args) -> None:
+def write_outputs(results: list[dict], out_dir: str, device: torch.device, args,
+                  failures: list[str], warnings: list[str]) -> None:
     out = ensure_dir(out_dir)
     tables = ensure_dir(out / "tables")
-    save_json({"device": str(device), "results": results,
+    save_json({"device": str(device), "torch": str(torch.__version__),
+               "python": sys.version.split()[0],
+               "gates_passed": not failures, "warnings": warnings, "results": results,
                "overfit_config": {"images": args.overfit_images, "steps": args.overfit_steps,
                                   "batch_size": args.batch_size, "lr": args.lr,
                                   "threshold": OVERFIT_THRESHOLD}},
@@ -331,9 +352,16 @@ def write_outputs(results: list[dict], out_dir: str, device: torch.device, args)
          "| Model | Year | Params | GFLOPs/img | Inductive bias |",
          "|---|---|---|---|---|"]
     for r in results:
-        flops = f"{r['flops']/1e9:.3f}" if r.get("flops") else "-"
+        flops = f"{r['flops'] / 1e9:.3f}" if r.get("flops") is not None else "n/a"
         L.append(f"| **{r['display_name']}** | {r['year']} | {r['params']:,} | {flops} "
                  f"| {r['inductive_bias']} |")
+    if any(r.get("flops") is None for r in results):
+        L += ["",
+              "_n/a: FLOPs could not be counted on this machine "
+              f"(torch {torch.__version__}, Python {sys.version.split()[0]}) -- the reason is in "
+              "`model_checks.json` under `flops_error`. FLOP counting is a measurement, not a gate: "
+              "the count depends only on the architecture and the input size, so a count taken on "
+              "any other machine applies unchanged._"]
 
     L += ["", "## Key idea\n", "| Model | Key idea |", "|---|---|"]
     for r in results:
@@ -364,11 +392,14 @@ def write_outputs(results: list[dict], out_dir: str, device: torch.device, args)
                      f"{ov['first_loss']:.3f} -> {ov['final_loss']:.4f} | "
                      f"{human_time(ov['seconds'])} | {'PASS' if ov['passed'] else '**FAIL**'} |")
 
-    L += ["", "## All checks\n", "| Model | Check | Status | Detail |", "|---|---|---|---|"]
+    L += ["", "## All checks\n",
+          "Every check is a gate -- one failure fails the script -- except FLOP counting, which is "
+          "a measurement and only warns.\n",
+          "| Model | Check | Status | Detail |", "|---|---|---|---|"]
     for r in results:
         for label, c in r["checks"].items():
-            L.append(f"| {r['display_name']} | {label} | {'PASS' if c['passed'] else '**FAIL**'} "
-                     f"| {c['detail']} |")
+            status = "PASS" if c["passed"] else ("**FAIL**" if c.get("gate", True) else "WARN (not a gate)")
+            L.append(f"| {r['display_name']} | {label} | {status} | {c['detail']} |")
     L.append("")
     (tables / "model_summary.md").write_text("\n".join(L), encoding="utf-8")
     print(f"wrote {tables / 'model_summary.md'}")

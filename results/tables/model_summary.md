@@ -43,51 +43,53 @@ protocol (spec Section 3). Accuracy is measured in `eval()` mode.
 
 | Model | Train acc | Loss (first -> final) | Time | Verdict |
 |---|---|---|---|---|
-| MLP | 100.0% | 2.774 -> 0.0025 | 12.0s | PASS |
-| Simple CNN | 100.0% | 2.300 -> 0.0110 | 1m 54s | PASS |
-| ResNet-18 | 100.0% | 2.286 -> 0.0053 | 6m 44s | PASS |
-| ViT | 100.0% | 2.358 -> 0.0090 | 7m 37s | PASS |
-| MLP-Mixer | 100.0% | 2.324 -> 0.0094 | 7m 54s | PASS |
-| ConvNeXt-mini | 100.0% | 2.397 -> 0.0031 | 10m 49s | PASS |
+| MLP | 100.0% | 2.774 -> 0.0025 | 10.1s | PASS |
+| Simple CNN | 100.0% | 2.300 -> 0.0110 | 1m 51s | PASS |
+| ResNet-18 | 100.0% | 2.286 -> 0.0053 | 7m 53s | PASS |
+| ViT | 100.0% | 2.358 -> 0.0090 | 7m 59s | PASS |
+| MLP-Mixer | 100.0% | 2.324 -> 0.0094 | 9m 26s | PASS |
+| ConvNeXt-mini | 100.0% | 2.397 -> 0.0031 | 11m 28s | PASS |
 
 ## All checks
+
+Every check is a gate -- one failure fails the script -- except FLOP counting, which is a measurement and only warns.
 
 | Model | Check | Status | Detail |
 |---|---|---|---|
 | MLP | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | MLP | parameter count near target | PASS | 3,807,242 vs target ~3,800,000 (+0.2%) |
-| MLP | FLOPs counted | PASS | 0.008 GFLOPs/image (forward, batch 1) |
+| MLP | FLOPs counted (measurement, not a gate) | PASS | 0.008 GFLOPs/image (forward, batch 1) |
 | MLP | eval() is deterministic | PASS | identical |
 | MLP | every parameter gets a gradient | PASS | all 11 tensors reached |
-| MLP | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 12.0s, reg off: dropout=0.2 |
+| MLP | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 10.1s, reg off: dropout=0.2 |
 | Simple CNN | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | Simple CNN | parameter count near target | PASS | 1,148,874 vs target ~1,100,000 (+4.4%) |
-| Simple CNN | FLOPs counted | PASS | 0.306 GFLOPs/image (forward, batch 1) |
+| Simple CNN | FLOPs counted (measurement, not a gate) | PASS | 0.306 GFLOPs/image (forward, batch 1) |
 | Simple CNN | eval() is deterministic | PASS | identical |
 | Simple CNN | every parameter gets a gradient | PASS | all 20 tensors reached |
-| Simple CNN | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 1m 54s, reg off: dropout=0.3 |
+| Simple CNN | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 1m 51s, reg off: dropout=0.3 |
 | ResNet-18 | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | ResNet-18 | parameter count near target | PASS | 11,173,962 vs target ~11,200,000 (-0.2%) |
-| ResNet-18 | FLOPs counted | PASS | 1.111 GFLOPs/image (forward, batch 1) |
+| ResNet-18 | FLOPs counted (measurement, not a gate) | PASS | 1.111 GFLOPs/image (forward, batch 1) |
 | ResNet-18 | eval() is deterministic | PASS | identical |
 | ResNet-18 | every parameter gets a gradient | PASS | all 62 tensors reached |
 | ResNet-18 | timm parameter cross-check | PASS | timm 11,181,642 vs ours 11,173,962 (diff 7,680, as expected: ImageNet 7x7 stem) |
-| ResNet-18 | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 6m 44s |
+| ResNet-18 | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 7m 53s |
 | ViT | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | ViT | parameter count near target | PASS | 8,335,882 vs target ~8,500,000 (-1.9%) |
-| ViT | FLOPs counted | PASS | 1.121 GFLOPs/image (forward, batch 1) |
+| ViT | FLOPs counted (measurement, not a gate) | PASS | 1.121 GFLOPs/image (forward, batch 1) |
 | ViT | eval() is deterministic | PASS | identical |
 | ViT | every parameter gets a gradient | PASS | all 92 tensors reached |
-| ViT | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 7m 37s, reg off: drop_path_rate=0.1 |
+| ViT | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 7m 59s, reg off: drop_path_rate=0.1 |
 | MLP-Mixer | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | MLP-Mixer | parameter count near target | PASS | 9,686,922 vs target ~9,700,000 (-0.1%) |
-| MLP-Mixer | FLOPs counted | PASS | 1.361 GFLOPs/image (forward, batch 1) |
+| MLP-Mixer | FLOPs counted (measurement, not a gate) | PASS | 1.361 GFLOPs/image (forward, batch 1) |
 | MLP-Mixer | eval() is deterministic | PASS | identical |
 | MLP-Mixer | every parameter gets a gradient | PASS | all 102 tensors reached |
-| MLP-Mixer | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 7m 54s, reg off: drop_path_rate=0.1 |
+| MLP-Mixer | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 9m 26s, reg off: drop_path_rate=0.1 |
 | ConvNeXt-mini | forward (2,3,32,32) -> (2,10) | PASS | (2, 10) |
 | ConvNeXt-mini | parameter count near target | PASS | 8,536,458 vs target ~8,500,000 (+0.4%) |
-| ConvNeXt-mini | FLOPs counted | PASS | 0.890 GFLOPs/image (forward, batch 1) |
+| ConvNeXt-mini | FLOPs counted (measurement, not a gate) | PASS | 0.890 GFLOPs/image (forward, batch 1) |
 | ConvNeXt-mini | eval() is deterministic | PASS | identical |
 | ConvNeXt-mini | every parameter gets a gradient | PASS | all 128 tensors reached |
-| ConvNeXt-mini | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 10m 49s, reg off: drop_path_rate=0.1 |
+| ConvNeXt-mini | overfits 256 images in 200 steps | PASS | train acc 100.0% (threshold 98%), 11m 28s, reg off: drop_path_rate=0.1 |
