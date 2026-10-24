@@ -1,0 +1,115 @@
+{
+  "all_passed": true,
+  "checks": [
+    {
+      "check": "queue exited 0 despite failures",
+      "passed": true,
+      "detail": "exit 0"
+    },
+    {
+      "check": "RUN_SUMMARY.md written",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "good sweep point done",
+      "passed": true,
+      "detail": "done"
+    },
+    {
+      "check": "LR 1e30 recorded as diverged",
+      "passed": true,
+      "detail": "diverged"
+    },
+    {
+      "check": "diverged run left a failure log",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "E1 ran after the sweep",
+      "passed": true,
+      "detail": "done"
+    },
+    {
+      "check": "E2/mlp/f0.1/s0 done",
+      "passed": true,
+      "detail": "done"
+    },
+    {
+      "check": "E2/mlp/f1/s0 done",
+      "passed": true,
+      "detail": "done"
+    },
+    {
+      "check": "E5 handled without crashing the queue",
+      "passed": true,
+      "detail": "not_built"
+    },
+    {
+      "check": "E6 handled without crashing the queue",
+      "passed": true,
+      "detail": "not_built"
+    },
+    {
+      "check": "E7 handled without crashing the queue",
+      "passed": true,
+      "detail": "not_built"
+    },
+    {
+      "check": "auto-pick chose the non-diverged LR",
+      "passed": true,
+      "detail": "{'lr': 0.001, 'best_val_acc': 0.421, 'at_grid_edge': True, 'diverged': [1e+30], 'missing': []}"
+    },
+    {
+      "check": "diverged LR listed in the pick record",
+      "passed": true,
+      "detail": "[1e+30]"
+    },
+    {
+      "check": "E1 trained at the picked LR",
+      "passed": true,
+      "detail": "lr=0.001"
+    },
+    {
+      "check": "E1 touched test once",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "E1 kept best.pt, dropped last.pt (spec 12.5)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "sweep run saved no checkpoints",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "sweep run never touched test",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "progress.log written",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "nothing written to the real results/runs",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "relaunch skips finished jobs",
+      "passed": true,
+      "detail": "4 skipped as complete (expected 4), 42s"
+    },
+    {
+      "check": "relaunch does not retry the diverged run",
+      "passed": true,
+      "detail": "1 diverged kept, 3 to run (expected 3)"
+    }
+  ]
+}

@@ -1,0 +1,573 @@
+{
+  "all_passed": true,
+  "quick": false,
+  "device": "cpu",
+  "results": [
+    {
+      "model": "mlp",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.3508 -> 2.0935"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/mlp/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.3444"
+        }
+      ],
+      "seconds": 67.45004070000141,
+      "test_acc": 0.3444,
+      "best_val_acc": 0.3438,
+      "train_imgs_per_sec": 385.51024464435653,
+      "sec_per_epoch": 23.25707374999911,
+      "train_loss": [
+        2.350762,
+        2.093469
+      ]
+    },
+    {
+      "model": "simple_cnn",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.0410 -> 1.8087"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/simple_cnn/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.4044"
+        }
+      ],
+      "seconds": 192.8501894999972,
+      "test_acc": 0.4044,
+      "best_val_acc": 0.4078,
+      "train_imgs_per_sec": 101.68857302965442,
+      "sec_per_epoch": 67.47583889999987,
+      "train_loss": [
+        2.04097,
+        1.808714
+      ]
+    },
+    {
+      "model": "resnet18",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.1486 -> 1.9541"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/resnet18/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.3237"
+        }
+      ],
+      "seconds": 540.8952583999999,
+      "test_acc": 0.3237,
+      "best_val_acc": 0.3192,
+      "train_imgs_per_sec": 35.599746934113114,
+      "sec_per_epoch": 180.42221000000245,
+      "train_loss": [
+        2.148636,
+        1.95413
+      ]
+    },
+    {
+      "model": "vit",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.2026 -> 2.0700"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/vit/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.2733"
+        }
+      ],
+      "seconds": 642.7759688000006,
+      "test_acc": 0.2733,
+      "best_val_acc": 0.265,
+      "train_imgs_per_sec": 25.707297205214296,
+      "sec_per_epoch": 238.819802349999,
+      "train_loss": [
+        2.202627,
+        2.07004
+      ]
+    },
+    {
+      "model": "mlp_mixer",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.1551 -> 2.0407"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/mlp_mixer/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.2658"
+        }
+      ],
+      "seconds": 811.213803900002,
+      "test_acc": 0.2658,
+      "best_val_acc": 0.2626,
+      "train_imgs_per_sec": 19.45263786342913,
+      "sec_per_epoch": 310.42911294999976,
+      "train_loss": [
+        2.155081,
+        2.040725
+      ]
+    },
+    {
+      "model": "convnext_mini",
+      "checks": [
+        {
+          "check": "interrupted after epoch 1",
+          "passed": true,
+          "detail": "{'status': 'interrupted', 'step': 35, 'period': 1}"
+        },
+        {
+          "check": "last.pt written before interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "no metrics.json after interruption",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "completed",
+          "passed": true,
+          "detail": "completed"
+        },
+        {
+          "check": "resumed at the end of epoch 1",
+          "passed": true,
+          "detail": "resumed_from_step=35 expected 35"
+        },
+        {
+          "check": "history has epochs 1 and 2",
+          "passed": true,
+          "detail": "['1', '2']"
+        },
+        {
+          "check": "train loss decreasing",
+          "passed": true,
+          "detail": "2.2327 -> 2.0953"
+        },
+        {
+          "check": "LR schedule continued across resume",
+          "passed": true,
+          "detail": "1.786e-06 vs 1.786e-06"
+        },
+        {
+          "check": "all output files written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "TensorBoard events written",
+          "passed": true,
+          "detail": "results/smoke/tb/convnext_mini/0"
+        },
+        {
+          "check": "metrics.json has every spec key",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "core metrics non-null",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "test acc above chance",
+          "passed": true,
+          "detail": "test_acc=0.2731"
+        }
+      ],
+      "seconds": 714.1910084999981,
+      "test_acc": 0.2731,
+      "best_val_acc": 0.2694,
+      "train_imgs_per_sec": 21.74887430618018,
+      "sec_per_epoch": 270.88361584999984,
+      "train_loss": [
+        2.232728,
+        2.095277
+      ]
+    },
+    {
+      "model": "loop_level",
+      "seconds": 0.0,
+      "checks": [
+        {
+          "check": "schedule: warmup is linear and starts > 0",
+          "passed": true,
+          "detail": "lr[0]=2.00e-05 lr[49]=1.00e-03"
+        },
+        {
+          "check": "schedule: peak lr reached right after warmup",
+          "passed": true,
+          "detail": "lr[50]=1.00e-03"
+        },
+        {
+          "check": "schedule: cosine phase is monotone non-increasing",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "check": "schedule: final lr ~ min_lr",
+          "passed": true,
+          "detail": "lr[end]=1.00e-06"
+        },
+        {
+          "check": "schedule: cosine midpoint ~ (base + min) / 2",
+          "passed": true,
+          "detail": "lr[mid]=5.01e-04"
+        },
+        {
+          "check": "param groups mlp",
+          "passed": true,
+          "detail": "4 decay / 7 no-decay"
+        },
+        {
+          "check": "param groups simple_cnn",
+          "passed": true,
+          "detail": "7 decay / 13 no-decay"
+        },
+        {
+          "check": "param groups resnet18",
+          "passed": true,
+          "detail": "21 decay / 41 no-decay"
+        },
+        {
+          "check": "param groups vit",
+          "passed": true,
+          "detail": "30 decay / 62 no-decay"
+        },
+        {
+          "check": "param groups mlp_mixer",
+          "passed": true,
+          "detail": "34 decay / 68 no-decay"
+        },
+        {
+          "check": "param groups convnext_mini",
+          "passed": true,
+          "detail": "41 decay / 87 no-decay"
+        },
+        {
+          "check": "interrupted+resumed == uninterrupted",
+          "passed": true,
+          "detail": "history identical, weights identical"
+        }
+      ]
+    },
+    {
+      "model": "extra_paths",
+      "seconds": 0.0,
+      "checks": [
+        {
+          "check": "E3 strong augmentation (simple_cnn) runs end to end",
+          "passed": true,
+          "detail": "20 steps, aug=strong, flops=305533952"
+        },
+        {
+          "check": "E2 step-defined run (vit, partial epoch) runs end to end",
+          "passed": true,
+          "detail": "40 steps, aug=standard, flops=1121273856"
+        },
+        {
+          "check": "E4 vit_small_patch16_224 @224 (random init) runs end to end",
+          "passed": true,
+          "detail": "3 steps, aug=standard, flops=8481676800"
+        },
+        {
+          "check": "E4 resnet50 @224 (random init) runs end to end",
+          "passed": true,
+          "detail": "3 steps, aug=standard, flops=8174313472"
+        }
+      ]
+    }
+  ]
+}

@@ -85,6 +85,11 @@ experiments:
   # (45,000 // 128 with drop_last) = 70,200. The spec's ~70,400 is the same
   # number computed without drop_last; we use drop_last so step counts are exact.
   e2_total_steps: 70200
+  # Spec E2 seeds: 3 for 10% and 100%, 1 for 5/25/50%. The 100% point reuses
+  # E1 (same steps, same eval cadence), so it inherits E1's 3 seeds.
+  e2_seeds_default: [0]
+  e2_seeds_by_fraction: {0.1: [0, 1, 2]}
+  e2_reuse_e1_for_full_data: true
   lr_sweep: {lrs: [2.5e-4, 5.0e-4, 1.0e-3, 2.0e-3, 4.0e-3], epochs: 40}
   e4_pretrained:
     models: [vit_small_patch16_224.augreg_in21k_ft_in1k, resnet50.a1_in1k]
@@ -121,12 +126,19 @@ mode_9h:
   e7: {enabled: true}
   warmup_fraction: 0.05      # 5% of total steps in every run
   # Spec 12.3, added in this order while the projection still fits the budget.
+  # Each entry says which experiment it extends and with what; src/experiments.py
+  # turns them into jobs. E2 upgrades without `fractions` use e2.fractions.
   upgrades:
-    - {name: e3_resnet18_vit, detail: "E3 for resnet18 + vit, 100 epochs each"}
-    - {name: e1_seeds_1_2, detail: "E1 seeds 1 and 2 -> mean +/- std error bars"}
-    - {name: e3_remaining, detail: "E3 for the other 4 models"}
-    - {name: e2_extra_fractions, detail: "E2 fractions 0.05 and 0.5"}
-    - {name: e2_seeds_1_2, detail: "E2 seeds 1 and 2"}
+    - {name: e3_resnet18_vit, exp: E3, models: [resnet18, vit],
+       detail: "E3 for resnet18 + vit, 100 epochs each"}
+    - {name: e1_seeds_1_2, exp: E1, seeds: [1, 2],
+       detail: "E1 seeds 1 and 2 -> mean +/- std error bars"}
+    - {name: e3_remaining, exp: E3, exclude_models: [resnet18, vit],
+       detail: "E3 for the other 4 models"}
+    - {name: e2_extra_fractions, exp: E2, fractions: [0.05, 0.5], seeds: [0],
+       detail: "E2 fractions 0.05 and 0.5"}
+    - {name: e2_seeds_1_2, exp: E2, seeds: [1, 2],
+       detail: "E2 seeds 1 and 2"}
   # Spec 12.4 trim ladder, applied only if even the core does not fit.
   # E1 is never cut below 100 epochs.
   trim_ladder:

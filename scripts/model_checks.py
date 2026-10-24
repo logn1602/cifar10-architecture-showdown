@@ -39,6 +39,7 @@ from src.data import build_datasets  # noqa: E402
 from src.models import (  # noqa: E402
     MODEL_ORDER, build_model, count_parameters, get_meta,
 )
+from src.profile import count_flops  # noqa: E402
 from src.utils import (  # noqa: E402
     ensure_dir, human_time, load_config, save_json, set_seed,
 )
@@ -53,33 +54,6 @@ PARAM_TARGETS = {
     "vit": 8.5e6, "mlp_mixer": 9.7e6, "convnext_mini": 8.5e6,
 }
 PARAM_TOLERANCE = 0.15   # +/-15% of the target
-
-
-def count_flops(model: nn.Module, device: torch.device) -> int | None:
-    """Forward FLOPs for a single 32x32 image, via FlopCounterMode.
-
-    Counts matmul/conv FLOPs only -- elementwise work (GELU, LayerNorm, the
-    softmax) is not counted, which is the convention every published FLOP
-    number for these architectures follows.
-    """
-    try:
-        from torch.utils.flop_counter import FlopCounterMode
-    except ImportError:
-        return None
-
-    x = torch.randn(1, 3, 32, 32, device=device)
-    model.eval()
-    try:
-        counter = FlopCounterMode(display=False)
-    except TypeError:  # older/newer signature
-        counter = FlopCounterMode()
-    try:
-        with counter:
-            with torch.no_grad():
-                model(x)
-        return int(counter.get_total_flops())
-    except Exception:
-        return None
 
 
 def check_eval_determinism(model: nn.Module, device: torch.device) -> tuple[bool, str]:

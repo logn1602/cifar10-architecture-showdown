@@ -100,7 +100,7 @@ You can close the tab immediately. Progress is visible under the notebook's **Ve
 
 | Stage | Approx. wall-clock on 2× T4 |
 |---|---|
-| Setup, install, data checks, Phase 2 model gate | 5–10 min |
+| Setup, install, data checks, Phase 2 model gate, Phase 3 smoke test + queue self-test | 10–15 min |
 | Budget planner | 3–5 min |
 | LR sweep (18 runs × 10 epochs) | ~1.0 h |
 | E1 main showdown (6 × 100 epochs) | ~2.9 h |
@@ -111,7 +111,10 @@ You can close the tab immediately. Progress is visible under the notebook's **Ve
 | Upgrades, budget permitting | up to ~1.3 h |
 
 These come from `scripts/estimate_compute.py` and are **estimates**. The in-notebook planner
-(`scripts/plan_budget.py`, Phase 3) times the real hardware and replaces them.
+(`scripts/plan_budget.py`) times every model on the real T4, simulates the queue across both GPUs,
+and prints the per-run plan and projected finish before the long cell starts. A committed run
+cannot wait for a "go", so the plan is applied as printed: read it in the log afterwards, and
+`RUN_SUMMARY.md` records which upgrades actually made it in.
 
 ---
 

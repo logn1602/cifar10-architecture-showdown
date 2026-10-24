@@ -58,3 +58,12 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Smoke-test scratch runs (scripts/smoke_test.py); the summary JSON is kept.
+results/smoke/
+
+# Queue coordination scratch (scripts/run_all.py).
+results/queue_state/
+
+# CPU self-test of the queue (scripts/queue_selftest.py); summary JSON is kept.
+results/_queue_test/
