@@ -100,10 +100,36 @@ experiments:
     batch_size: 64
   e5_corruptions: [gaussian_noise, gaussian_blur, contrast, brightness, jpeg, pixelate]
   e5_severities: [1, 2, 3, 4, 5]
+  # Severity 1..5 parameters, copied from the CIFAR-10-C reference
+  # implementation (Hendrycks & Dietterich 2019, make_cifar_c.py), so the
+  # numbers are comparable with published CIFAR-10-C results.
+  e5_params:
+    gaussian_noise: [0.04, 0.06, 0.08, 0.09, 0.10]   # noise std, pixels in [0, 1]
+    gaussian_blur: [0.4, 0.6, 0.7, 0.8, 1.0]         # sigma, in pixels
+    contrast: [0.75, 0.5, 0.4, 0.3, 0.15]            # factor applied around the image mean
+    brightness: [0.05, 0.1, 0.15, 0.2, 0.3]          # added to the HSV value channel
+    jpeg: [80, 65, 58, 50, 40]                       # JPEG quality
+    pixelate: [0.95, 0.9, 0.85, 0.75, 0.65]          # downscale factor before upscaling
+  e5_seed: 0                 # Gaussian-noise draw; every model sees the same noisy images
   e6_patch_grids: [2, 4, 8]
+  # patch: permute whole patches. pixel: keep patches in place, shuffle the
+  # pixels inside each one. Seeded, so every model sees identical scrambles.
+  e6_variants: [patch, pixel]
+  e6_seed: 0
+  e7:
+    # 2 images per class for 8 classes, picked once by seed -- never by
+    # looking at any model's predictions -- and reused for every figure.
+    fixed_classes: [airplane, bird, cat, deer, dog, frog, horse, ship]
+    images_per_class: 2
+    selection_seed: 0
+    attention_images: 4      # rows in the per-head ViT attention figure
+    embed_images: 2000       # stratified test images for the UMAP plots
+    umap: {n_neighbors: 15, min_dist: 0.1, seed: 0}
+    mistakes_per_model: 12
 
 eval:
   ece_bins: 15
+  batch_size: 1000           # inference batch for the evaluation-only experiments
 
 # =============================================================================
 # 9-hour unattended mode -- spec Section 12.2. Trimmed seeds/epochs, same six

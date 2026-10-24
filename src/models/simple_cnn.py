@@ -106,3 +106,14 @@ class SimpleCNN(nn.Module):
             x = stage(x)
             maps.append(x)               # (B, C_i, H_i, W_i)
         return maps
+
+    @property
+    def gradcam_layer(self) -> nn.Module:
+        """Last conv layer (stage 3's second Conv-BN-ReLU) -- the Grad-CAM target.
+
+        Taken *before* the final max-pool, as Grad-CAM conventionally is, so its
+        map is 8x8. ResNet-18's and ConvNeXt's last stages have no pooling of
+        their own and come out at 4x4 -- a real difference in how coarse their
+        maps can be, not an artefact of this choice.
+        """
+        return self.features[-1][-2]     # (B, 256, 8, 8)

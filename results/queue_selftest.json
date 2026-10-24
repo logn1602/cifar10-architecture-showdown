@@ -42,19 +42,34 @@
       "detail": "done"
     },
     {
-      "check": "E5 handled without crashing the queue",
+      "check": "E5 ran on the toy E1 checkpoint",
       "passed": true,
-      "detail": "not_built"
+      "detail": "done"
     },
     {
-      "check": "E6 handled without crashing the queue",
+      "check": "E5 wrote robustness_raw.csv",
       "passed": true,
-      "detail": "not_built"
+      "detail": ""
     },
     {
-      "check": "E7 handled without crashing the queue",
+      "check": "E6 ran on the toy E1 checkpoint",
       "passed": true,
-      "detail": "not_built"
+      "detail": "done"
+    },
+    {
+      "check": "E6 wrote patch_shuffle_raw.csv",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "check": "E7 ran on the toy E1 checkpoint",
+      "passed": true,
+      "detail": "done"
+    },
+    {
+      "check": "E7 wrote summary.json",
+      "passed": true,
+      "detail": ""
     },
     {
       "check": "auto-pick chose the non-diverged LR",
@@ -104,12 +119,12 @@
     {
       "check": "relaunch skips finished jobs",
       "passed": true,
-      "detail": "4 skipped as complete (expected 4), 42s"
+      "detail": "7 skipped as complete (expected 7), 3s"
     },
     {
       "check": "relaunch does not retry the diverged run",
       "passed": true,
-      "detail": "1 diverged kept, 3 to run (expected 3)"
+      "detail": "1 diverged kept, 0 to run (expected 0)"
     }
   ]
 }

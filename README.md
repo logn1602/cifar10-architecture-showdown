@@ -1,6 +1,8 @@
 # 🖼️ Evolution of Vision — CIFAR-10 Architecture Showdown
 
-> **Status: work in progress.** Phases 0, 1 and 2 are complete; Phases 3–9 are not built yet.
+> **Status: work in progress.** Phases 0–3 are complete, and the evaluation code for E5–E7 is
+> built and tested on CPU. The training queue has **not been run yet** (it runs on Kaggle), and the
+> Phase 9 write-up does not exist yet.
 > **There are no results in this repo.** Every accuracy number in the final write-up will be
 > generated from `results/runs/` — none are hand-written, and none exist yet.
 
@@ -84,7 +86,8 @@ So the split is: **build and verify locally on CPU, train on Kaggle with 2× T4.
 
 `scripts/estimate_compute.py` puts the 9h-mode core queue at **~12 GPU-hours**, which is **~6.7 h
 wall-clock on 2× T4** and does *not* fit an 8 h budget on a single T4. Full mode is a **multi-day**
-job (>100 GPU-hours) — see `results/tables/compute_estimate.md`.
+job (>100 GPU-hours) — see `results/tables/compute_estimate.md`. These are estimates; on Kaggle,
+`scripts/plan_budget.py` times the real T4s first and fits the queue to the budget from those.
 
 See [`docs/KAGGLE.md`](docs/KAGGLE.md) for the step-by-step, and
 [`kaggle_runner.ipynb`](kaggle_runner.ipynb) for the runner notebook.
@@ -124,9 +127,21 @@ python scripts/check_data.py                # -> results/tables/data_report.md +
 # 4. Phase 2 -- models
 python scripts/model_checks.py --skip-overfit   # seconds: shapes, params, FLOPs, gradients
 python scripts/model_checks.py                  # adds the overfit test (~45 min on CPU)
+
+# 5. Phase 3 -- training loop and the unattended queue (gates; ~45 min on this CPU)
+python scripts/smoke_test.py                # 6 models x 2 epochs, interrupted + resumed, E2/E3/E4 paths
+python scripts/queue_selftest.py            # the real queue on toy runs, incl. a diverging LR
+python scripts/plan_budget.py --hours 8     # times the hardware, fits the 9h queue (run on the GPU)
+python scripts/run_all.py --mode 9h         # the whole queue, resumable -- this is the Kaggle job
+
+# 6. E5-E7 evaluation on finished E1 checkpoints (normally run by the queue)
+python -m src.corruptions --exp E5          # robustness: 6 corruptions x 5 severities
+python -m src.corruptions --exp E6          # patch shuffle
+python -m src.interpret.e7                  # interpretability figures
 ```
 
-`scripts/check_data.py` is a gate, not a report: it exits non-zero if any hard check fails.
+`scripts/check_data.py`, `smoke_test.py` and `queue_selftest.py` are gates, not reports: each
+exits non-zero if any check fails.
 
 ---
 
@@ -138,23 +153,25 @@ cifar10-architecture-showdown/
 ├── configs/
 │   ├── base.yaml                      # ✅ the fairness protocol, 9h-mode sizes, figure colours
 │   ├── compute_reference.yaml         # ✅ reference throughputs for the budget estimate
-│   ├── models/                        # ✅ one yaml per architecture
-│   └── experiments/                   # ⬜ Phase 3+
+│   └── models/                        # ✅ one yaml per architecture
 ├── src/
 │   ├── utils.py                       # ✅ seeding, config, logging, hashing
 │   ├── data.py                        # ✅ splits, transforms, nested subsets, Mixup/CutMix
 │   ├── models/                        # ✅ the six architectures + registry + shared layers
-│   ├── train.py  evaluate.py  profile.py   # ⬜ Phase 3
-│   ├── corruptions.py                 # ⬜ Phase 7 (E5/E6)
-│   └── interpret/                     # ⬜ Phase 8 (E7)
+│   ├── train.py  evaluate.py  profile.py   # ✅ Phase 3: the one training loop + metrics + costs
+│   ├── experiments.py  runner.py      # ✅ Phase 3: every job of E1-E7, the unattended queue
+│   ├── analysis.py                    # ✅ shared plumbing for the evaluation-only experiments
+│   ├── corruptions.py                 # ✅ E5 robustness + E6 patch shuffle (code; runs pending)
+│   └── interpret/                     # ✅ E7 interpretability (code; runs pending)
 ├── scripts/
 │   ├── env_check.py                   # ✅ Phase 0
 │   ├── estimate_compute.py            # ✅ Phase 0
 │   ├── bench_dataloader.py            # ✅ Phase 0
 │   ├── check_data.py                  # ✅ Phase 1
 │   ├── model_checks.py                # ✅ Phase 2
-│   ├── smoke_test.py  lr_sweep.py  plan_budget.py   # ⬜ Phase 3
-│   ├── run_experiment.py  run_all.py  # ⬜ Phase 3+
+│   ├── smoke_test.py  queue_selftest.py   # ✅ Phase 3 gates
+│   ├── lr_sweep.py  plan_budget.py    # ✅ Phase 3
+│   ├── run_experiment.py  run_all.py  # ✅ Phase 3: one experiment / the whole queue
 │   └── make_report.py                 # ⬜ Phase 9
 ├── kaggle_runner.ipynb                # ✅ the unattended 2×T4 runner
 ├── docs/KAGGLE.md                     # ✅ how to run it

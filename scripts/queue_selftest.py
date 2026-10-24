@@ -12,8 +12,9 @@ It checks that:
   * a **diverging** sweep point (LR 1e30, guaranteed to blow up) is recorded as
     ``diverged``, is not retried, does not stop the queue, and is excluded
     from the LR pick;
-  * the evaluation experiments, whose code does not exist yet (Phases 7-8),
-    are reported as ``not_built`` rather than crashing the queue;
+  * the evaluation experiments (E5 robustness, E6 patch shuffle, E7
+    interpretability) run on the toy E1 checkpoint once it exists, and
+    complete;
   * ``progress.log``, ``RUN_SUMMARY.md`` and a failure log are written;
   * a second launch skips every finished job (resumability).
 
@@ -92,11 +93,13 @@ def main() -> int:
     for f in ("0.1", "1"):
         jid = f"E2/{MODEL}/f{f}/s0"
         checks.append((f"{jid} done", status.get(jid) == "done", status.get(jid, "?")))
-    for e in ("E5", "E6", "E7"):
-        # not_built until Phases 7-8 land; afterwards they should simply run.
-        checks.append((f"{e} handled without crashing the queue",
-                       status.get(f"{e}/eval") in ("not_built", "done"),
+    # The evaluation experiments run on whatever E1 checkpoints exist -- here
+    # the single toy MLP -- and must complete, leaving their raw outputs.
+    for e, raw in (("E5", "robustness_raw.csv"), ("E6", "patch_shuffle_raw.csv"),
+                   ("E7", "summary.json")):
+        checks.append((f"{e} ran on the toy E1 checkpoint", status.get(f"{e}/eval") == "done",
                        status.get(f"{e}/eval", "?")))
+        checks.append((f"{e} wrote {raw}", (root / "runs" / e / raw).exists(), ""))
 
     choice = root / "lr_choice_9h.json"
     if choice.exists():
