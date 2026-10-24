@@ -172,8 +172,9 @@ cifar10-architecture-showdown/
 │   ├── smoke_test.py  queue_selftest.py   # ✅ Phase 3 gates
 │   ├── lr_sweep.py  plan_budget.py    # ✅ Phase 3
 │   ├── run_experiment.py  run_all.py  # ✅ Phase 3: one experiment / the whole queue
+│   ├── make_kaggle_notebook.py        # ✅ generates + py_compile-checks kaggle_runner.ipynb
 │   └── make_report.py                 # ⬜ Phase 9
-├── kaggle_runner.ipynb                # ✅ the unattended 2×T4 runner
+├── kaggle_runner.ipynb                # ✅ the unattended 2×T4 runner (generated -- don't hand-edit)
 ├── docs/KAGGLE.md                     # ✅ how to run it
 └── results/                           # tables + figures (generated, never hand-edited)
 ```

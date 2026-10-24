@@ -7,6 +7,11 @@ would OOM before the first epoch finished. So the plan follows spec §1.4 and §
 2. run the real queue on **Kaggle with 2× T4** via `kaggle_runner.ipynb`;
 3. download `results.zip` and do the write-up (Phase 9) locally.
 
+> **The notebook is generated — don't edit `kaggle_runner.ipynb` by hand.** Edit the cells in
+> `scripts/make_kaggle_notebook.py` and run it: it rewrites the notebook, then extracts every code
+> cell and compiles it with `python -m py_compile`. `--check` verifies the committed notebook
+> without writing. A hand-patched cell 7 once reached Kaggle with a SyntaxError; this is the guard.
+
 Why 2× T4 and not 1: the Phase 0 projection puts the 9h-mode core queue at **~12 GPU-hours**.
 Split across two T4s at ~90% parallel efficiency that is **~6.7 h wall-clock**, which fits an 8 h
 budget with room for the first upgrade. On a single T4 the core alone overruns the window.
