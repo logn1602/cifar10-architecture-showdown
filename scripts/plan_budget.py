@@ -49,7 +49,9 @@ from src.experiments import (  # noqa: E402
     upgrade_order,
 )
 from src.models import MODEL_ORDER  # noqa: E402
-from src.train import build_any_model, build_param_groups, make_input_fn, pick_amp_dtype  # noqa: E402
+from src.train import (  # noqa: E402
+    build_any_model, build_param_groups, make_grad_scaler, make_input_fn, pick_amp_dtype,
+)
 from src.utils import PROJECT_ROOT, human_time, load_config, load_json, save_json, set_seed  # noqa: E402
 
 FULL_EPOCH_STEPS = 351       # 45,000 // 128 with drop_last
@@ -83,7 +85,7 @@ def time_training(model_name: str, model_cfg: dict, cfg: dict, device: torch.dev
     if channels_last:
         model = model.to(memory_format=torch.channels_last)
     amp_dtype = pick_amp_dtype(device, tcfg.get("amp", {}))
-    scaler = torch.amp.GradScaler("cuda", enabled=amp_dtype == torch.float16)
+    scaler = make_grad_scaler(amp_dtype == torch.float16)
     groups = build_param_groups(model, float(tcfg["weight_decay"]), tcfg.get("no_decay_keywords", []))
     for g in groups:
         g.pop("names")

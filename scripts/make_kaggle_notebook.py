@@ -74,6 +74,7 @@ experiments, trimmed seeds and epochs per spec Section 12.
 |---|---|---|
 | **Accelerator** | **GPU T4 × 2** | The queue is split across both GPUs. On 1× T4 the core does **not** fit in 8 h. |
 | **Internet** | **ON** | Needed for `pip install`, the CIFAR-10 download, and the E4 pretrained weights. |
+| **Environment** | **Always use latest environment** | A notebook pinned to its original environment can get a 2023 image (Python 3.10, PyTorch 2.0). The code still runs there, but the latest environment has a current PyTorch. |
 | **Persistence** | Files only (optional) | Not required; everything lands in `/kaggle/working`. |
 
 ### ▶️ How to start it
@@ -187,6 +188,17 @@ if n_gpu < 2:
     print("!" * 70)
 if free < 15:
     print(f"\n!! Only {free:.1f} GB free -- checkpoints + CIFAR-10 need ~10 GB. Watch for ENOSPC.")
+
+# Kaggle can pin a notebook to the environment it was created in. A pinned
+# 2023 image (Python 3.10, PyTorch 2.0) still runs this project -- the code is
+# kept compatible with PyTorch 2.0 -- but the latest environment is better.
+torch_version = tuple(int(v) for v in torch.__version__.split("+")[0].split(".")[:2])
+if torch_version < (2, 1):
+    print("\n" + "!" * 70)
+    print(f"!! PyTorch {torch.__version__} on Python {sys.version.split()[0]}: this notebook")
+    print("!! is probably PINNED to an old Kaggle environment. The run still works,")
+    print("!! but Settings -> Environment -> 'Always use latest environment' is better.")
+    print("!" * 70)
 '''),
 
     # --- cell 3 (code): 2. Fetch the repo into /kaggle/working.

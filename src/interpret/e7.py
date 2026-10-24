@@ -184,7 +184,10 @@ def _gradcam(nets, pred, images, labels, fixed, cfg, arrays) -> dict:
         arrays[f"gradcam_{m}_prob"] = res["prob"]
         native[m] = list(res["native_resolution"])
     check_model = "resnet18" if "resnet18" in nets else present[0]
-    xcheck = crosscheck(nets[check_model], nets[check_model].gradcam_layer, x)
+    try:  # a sanity measurement against a third-party library: never fatal
+        xcheck = crosscheck(nets[check_model], nets[check_model].gradcam_layer, x)
+    except Exception as exc:
+        xcheck = {"status": "error", "reason": f"{type(exc).__name__}: {exc}"}
     xcheck["model"] = check_model
 
     blocks = _blocks(len(fixed))

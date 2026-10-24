@@ -81,7 +81,7 @@ except ImportError:  # works for `python src/train.py`
     )
 
 __all__ = ["train", "DivergenceError", "lr_at", "build_param_groups", "pick_amp_dtype",
-           "build_any_model"]
+           "make_grad_scaler", "build_any_model"]
 
 HISTORY_FIELDS = [
     "epoch", "step", "data_epoch", "train_loss", "train_acc", "val_loss", "val_acc",
@@ -169,6 +169,21 @@ def pick_amp_dtype(device: torch.device, amp_cfg: dict) -> torch.dtype | None:
     if want == "bf16" and major >= 8:
         return torch.bfloat16
     return torch.float16
+
+
+def make_grad_scaler(enabled: bool):
+    """A CUDA ``GradScaler`` on any PyTorch from 2.0 on.
+
+    The device-generic ``torch.amp.GradScaler("cuda", ...)`` only exists from
+    PyTorch 2.3; Kaggle's image ships 2.0, where the same class lives at
+    ``torch.cuda.amp.GradScaler``. Same behaviour, same ``state_dict`` format.
+    The new spelling is preferred when present because newer releases
+    deprecate the old one (a FutureWarning on every run).
+    """
+    scaler_cls = getattr(torch.amp, "GradScaler", None)
+    if scaler_cls is not None:
+        return scaler_cls("cuda", enabled=enabled)
+    return torch.cuda.amp.GradScaler(enabled=enabled)
 
 
 def build_any_model(model_name: str, model_cfg: dict, num_classes: int = 10
@@ -423,7 +438,7 @@ def train(
                                 train_cfg.get("no_decay_keywords", []))
     group_names = [g.pop("names") for g in groups]
     optimizer = torch.optim.AdamW(groups, lr=base_lr, betas=tuple(train_cfg.get("betas", (0.9, 0.999))))
-    scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
+    scaler = make_grad_scaler(use_scaler)
     criterion = nn.CrossEntropyLoss(label_smoothing=float(train_cfg.get("label_smoothing", 0.0)))
     clip = train_cfg.get("grad_clip_norm")
 

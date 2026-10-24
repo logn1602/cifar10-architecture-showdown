@@ -79,9 +79,15 @@ In the notebook editor, attach it with **Add Input → Datasets → your dataset
 |---|---|
 | Accelerator | **GPU T4 × 2** |
 | Internet | **On** |
+| Environment | **Always use latest environment** |
 | Language | Python |
 
 Internet must be on for `pip install`, the CIFAR-10 download, and the E4 pretrained weights.
+
+A notebook pinned to its original environment can be handed a 2023 image (Python 3.10, PyTorch
+2.0) — that is what the first runs got. The code is kept compatible with PyTorch 2.0 and Python
+3.10–3.13, so a pinned run still works, and the environment-probe cell prints a warning when it
+sees PyTorch older than 2.1; but the latest environment has a current PyTorch, so prefer it.
 
 **Check your quota first.** Kaggle gives roughly 30 GPU-hours per week and caps a single session at
 around 12 h (both have changed over time — read the current numbers on the session sidebar). The
