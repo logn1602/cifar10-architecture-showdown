@@ -70,3 +70,6 @@ results/_queue_test/
 
 # Local E5-E7 test runs on smoke checkpoints.
 results/_eval_test/
+
+# CPU test of the report builder (scripts/report_selftest.py); synthetic numbers.
+results/_report_test/

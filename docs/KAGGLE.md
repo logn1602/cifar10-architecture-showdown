@@ -149,6 +149,25 @@ Then verify three things before trusting any number:
 2. **`results/RUN_SUMMARY.md`** — which runs completed, which failed, which upgrades made it in.
 3. **`results/failures/`** — empty is ideal; if not, check whether anything you need is in there.
 
+The archive also carries Kaggle's copies of files that are committed locally, and `-Force`
+overwrites them. `git status` lists what changed. Restore the FLOP-bearing ones, because the
+Kaggle copies may say `n/a`:
+
+```powershell
+git checkout -- results/model_checks.json results/tables/model_summary.md
+```
+
+Then build the write-up. `make_report.py` reads only the unzipped JSON/CSV and recounts FLOPs
+locally, so it needs no GPU and no checkpoints:
+
+```powershell
+python scripts/make_report.py     # -> results/REPORT.md, tables/*, figures 1-7 and 15
+```
+
+It reports any experiment or figure that is missing rather than failing, so it is safe to run on
+a queue that did not finish. `python scripts/report_selftest.py` checks it end to end on
+synthetic results.
+
 ---
 
 ## 6. Troubleshooting
