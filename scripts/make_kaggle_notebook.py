@@ -82,6 +82,11 @@ experiments, trimmed seeds and epochs per spec Section 12.
 Use **Save Version → Save & Run All (Commit)**, *not* the interactive "Run All".
 A committed run keeps going with your browser closed; an interactive session dies when you disconnect.
 
+**Optional, recommended first: a ~10-minute smoke run.** Set `SMOKE = True` in the CONFIG cell and
+commit. Only `scripts/smoke_test.py` runs: every model through the real training loop on the T4
+(fp16 + GradScaler, interrupted and resumed, the E2/E3/E4 code paths). Every later cell skips
+itself. If it passes, set `SMOKE = False` and commit again for the real run.
+
 **Check Kaggle's current per-session GPU limit before you start** (historically ~12 h, and there is a
 weekly GPU quota of ~30 h). The default `BUDGET_HOURS = 8` is chosen to sit comfortably under it.
 
@@ -108,6 +113,11 @@ DATASET_SLUG = ""          # only used when SOURCE="dataset"; "" auto-detects
 
 BUDGET_HOURS = 8.0         # spec 12.4 default: ~1 h of slack inside a 9 h window
 MODE = "9h"
+
+# SMOKE = True: a short GPU check before spending the 8-hour budget. Runs only
+# scripts/smoke_test.py (every model through the real training loop on the T4,
+# interrupted and resumed), then every later cell skips itself.
+SMOKE = False
 
 WORK_DIR = Path("/kaggle/working/cifar10-architecture-showdown")
 SPEC_FILE = "CIFAR10_ARCHITECTURE_SHOWDOWN.md"   # the marker that identifies the repo root
@@ -297,47 +307,58 @@ print("\nextras installed, torch CUDA intact")
 # `python scripts/check_data.py`. data/ is gitignored, so the 45k/5k split is
 # regenerated here rather than shipped -- these hashes are the proof that
 # "val accuracy" means the same thing on both machines.
+#
+# With SMOKE = True this cell runs only the GPU smoke test, and every cell
+# after it skips itself.
 # =============================================================================
 import os
 os.chdir(WORK_DIR)
 
-REQUIRED = {
-    "scripts/env_check.py":        "Phase 0",
-    "scripts/check_data.py":       "Phase 1",
-    "scripts/model_checks.py":     "Phase 2",
-    "src/data.py":                 "Phase 1",
-    "scripts/plan_budget.py":      "Phase 3",
-    "scripts/run_all.py":          "Phase 3",
-}
-print("Required scripts:")
-missing = []
-for rel, phase in REQUIRED.items():
-    ok = (WORK_DIR / rel).exists()
-    print(f"  [{'ok' if ok else ' MISSING '}] {rel:<28} ({phase})")
-    if not ok:
-        missing.append(rel)
+if SMOKE:
+    # Every model through the real training loop on the T4 -- fp16 autocast,
+    # the GradScaler, DataLoader workers, interrupt + resume, the E2/E3/E4
+    # code paths. ~2-4 min. A failure raises here and stops the run.
+    run([PY, "scripts/smoke_test.py"])
+    print("\n>>> SMOKE run passed. Nothing else runs in this version.")
+    print(">>> Set SMOKE = False in the CONFIG cell for the real run.")
+else:
+    REQUIRED = {
+        "scripts/env_check.py":        "Phase 0",
+        "scripts/check_data.py":       "Phase 1",
+        "scripts/model_checks.py":     "Phase 2",
+        "src/data.py":                 "Phase 1",
+        "scripts/plan_budget.py":      "Phase 3",
+        "scripts/run_all.py":          "Phase 3",
+    }
+    print("Required scripts:")
+    missing = []
+    for rel, phase in REQUIRED.items():
+        ok = (WORK_DIR / rel).exists()
+        print(f"  [{'ok' if ok else ' MISSING '}] {rel:<28} ({phase})")
+        if not ok:
+            missing.append(rel)
 
-assert not missing, f"Missing {missing} -- is the clone at the right commit?"
+    assert not missing, f"Missing {missing} -- is the clone at the right commit?"
 
-run([PY, "scripts/env_check.py"])
-run([PY, "-m", "src.data"])
-run([PY, "scripts/check_data.py", "--quick"])
+    run([PY, "scripts/env_check.py"])
+    run([PY, "-m", "src.data"])
+    run([PY, "scripts/check_data.py", "--quick"])
 
-# Phase 2 gate. On CPU this takes ~50 min; on a T4 it is seconds, so it is
-# cheap insurance to re-verify every model can still memorise 256 images
-# right before committing 8 GPU-hours to training them.
-run([PY, "scripts/model_checks.py"])
+    # Phase 2 gate. On CPU this takes ~50 min; on a T4 it is seconds, so it is
+    # cheap insurance to re-verify every model can still memorise 256 images
+    # right before committing 8 GPU-hours to training them.
+    run([PY, "scripts/model_checks.py"])
 
-# Phase 3 gates, on the real GPU (spec 12.6: "smoke test passed on the GPU").
-#  - smoke_test: every model through the real training loop, interrupted and
-#    resumed, all output files checked. ~2-4 min on a T4.
-#  - queue_selftest: the unattended queue itself -- child processes, deps,
-#    LR auto-pick, a deliberately diverging run, relaunch/skip. Toy-sized runs
-#    under results/_queue_test, so nothing it writes is mistaken for real work.
-run([PY, "scripts/smoke_test.py"])
-run([PY, "scripts/queue_selftest.py"])
+    # Phase 3 gates, on the real GPU (spec 12.6: "smoke test passed on the GPU").
+    #  - smoke_test: every model through the real training loop, interrupted and
+    #    resumed, all output files checked. ~2-4 min on a T4.
+    #  - queue_selftest: the unattended queue itself -- child processes, deps,
+    #    LR auto-pick, a deliberately diverging run, relaunch/skip. Toy-sized runs
+    #    under results/_queue_test, so nothing it writes is mistaken for real work.
+    run([PY, "scripts/smoke_test.py"])
+    run([PY, "scripts/queue_selftest.py"])
 
-print("\n>>> Compare the split sha256 above against your local run. They must match.")
+    print("\n>>> Compare the split sha256 above against your local run. They must match.")
 '''),
 
     # --- cell 6 (code): 5. Budget planner (spec 12.4) -- times the real hardware, prints the q
@@ -351,7 +372,10 @@ print("\n>>> Compare the split sha256 above against your local run. They must ma
 # =============================================================================
 import os
 os.chdir(WORK_DIR)
-run([PY, "scripts/plan_budget.py", "--hours", str(BUDGET_HOURS)])
+if SMOKE:
+    print("SMOKE = True -- skipped: no budget plan.")
+else:
+    run([PY, "scripts/plan_budget.py", "--hours", str(BUDGET_HOURS)])
 '''),
 
     # --- cell 7 (code): 6. THE LONG RUN -- LR sweep -> E1 -> E7/E5/E6 -> E2 -> E4 -> upgrades.
@@ -370,15 +394,18 @@ os.chdir(WORK_DIR)
 (WORK_DIR / "results").mkdir(parents=True, exist_ok=True)
 
 RUN_OK = False
-try:
-    run([PY, "scripts/run_all.py", "--mode", MODE],
-        tee=str(WORK_DIR / "results" / "run_all.log"))
-    RUN_OK = True
-except Exception:
-    print("\n" + "!" * 70)
-    print("!! The queue exited non-zero. Packaging whatever completed.")
-    print("!" * 70)
-    traceback.print_exc()
+if SMOKE:
+    print("SMOKE = True -- skipped: the queue does not run.")
+else:
+    try:
+        run([PY, "scripts/run_all.py", "--mode", MODE],
+            tee=str(WORK_DIR / "results" / "run_all.log"))
+        RUN_OK = True
+    except Exception:
+        print("\n" + "!" * 70)
+        print("!! The queue exited non-zero. Packaging whatever completed.")
+        print("!" * 70)
+        traceback.print_exc()
 '''),
 
     # --- cell 8 (code): 7. Package the results.
@@ -405,7 +432,10 @@ def human(n):
         n /= 1024
     return f"{n:.1f} TB"
 
-if not RESULTS.exists() or not any(RESULTS.rglob("*")):
+if SMOKE:
+    print("SMOKE = True -- skipped: nothing to package "
+          "(results/smoke_test.json is in the output as it is).")
+elif not RESULTS.exists() or not any(RESULTS.rglob("*")):
     print("results/ is empty -- nothing to package.")
 else:
     # The smoke/self-test scratch dirs are not results.
@@ -434,31 +464,40 @@ else:
 # =============================================================================
 # 8. Final summary.
 # =============================================================================
+import json
 from pathlib import Path
 RESULTS = WORK_DIR / "results"
 
-for name, n_lines in [("RUN_SUMMARY.md", None), ("progress.log", 40)]:
-    p = RESULTS / name
-    print("=" * 78)
-    print(f"  {name}")
-    print("=" * 78)
-    if p.exists():
-        text = p.read_text(encoding="utf-8", errors="replace")
-        lines = text.splitlines()
-        if n_lines and len(lines) > n_lines:
-            print(f"... ({len(lines) - n_lines} earlier lines omitted)")
-            lines = lines[-n_lines:]
-        print("\n".join(lines))
-    else:
-        print(f"(not found -- {name} is written by scripts/run_all.py)")
-    print()
+if SMOKE:
+    # Reached only if the smoke test passed: a failure stops the run in cell 4.
+    s = json.loads((RESULTS / "smoke_test.json").read_text(encoding="utf-8"))
+    checks = [c for r in s["results"] for c in r["checks"]]
+    print(f"SMOKE run on {s['device']}: {sum(c['passed'] for c in checks)}/{len(checks)} checks "
+          f"passed -- {'ALL PASS' if s['all_passed'] else 'FAILURES'}.")
+    print("Set SMOKE = False in the CONFIG cell for the real run.")
+else:
+    for name, n_lines in [("RUN_SUMMARY.md", None), ("progress.log", 40)]:
+        p = RESULTS / name
+        print("=" * 78)
+        print(f"  {name}")
+        print("=" * 78)
+        if p.exists():
+            text = p.read_text(encoding="utf-8", errors="replace")
+            lines = text.splitlines()
+            if n_lines and len(lines) > n_lines:
+                print(f"... ({len(lines) - n_lines} earlier lines omitted)")
+                lines = lines[-n_lines:]
+            print("\n".join(lines))
+        else:
+            print(f"(not found -- {name} is written by scripts/run_all.py)")
+        print()
 
-fails = RESULTS / "failures"
-if fails.exists():
-    logs = sorted(fails.glob("*.log"))
-    print(f"{len(logs)} failed run(s):")
-    for f in logs:
-        print(f"  - {f.name}")
+    fails = RESULTS / "failures"
+    if fails.exists():
+        logs = sorted(fails.glob("*.log"))
+        print(f"{len(logs)} failed run(s):")
+        for f in logs:
+            print(f"  - {f.name}")
 '''),
 
     # --- cell 10 (markdown): 📥 When you get back
@@ -466,6 +505,9 @@ if fails.exists():
 ---
 
 ## 📥 When you get back
+
+> After a **SMOKE** run there is nothing to download: read the pre-flight cell's log (or
+> `results/smoke_test.json` in the output), then set `SMOKE = False` and commit again.
 
 1. **Download the archives** from the Output tab of the committed version:
    - `results_light.zip` — tables, figures, metrics, logs. This is what Phase 9 needs.

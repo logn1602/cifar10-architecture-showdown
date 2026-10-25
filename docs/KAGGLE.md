@@ -105,6 +105,17 @@ somewhere around hour two of an eight-hour job.
 
 You can close the tab immediately. Progress is visible under the notebook's **Versions** tab.
 
+### Optional, recommended first: a smoke run (~10 min)
+
+Set `SMOKE = True` in the CONFIG cell and commit. The notebook probes the GPU, fetches the repo,
+installs the extras, runs **only** `scripts/smoke_test.py`, and every later cell skips itself. The
+smoke test pushes each of the six models through the real training loop on the T4 (fp16 autocast,
+the GradScaler, DataLoader workers, interrupted and resumed, plus the E2/E3/E4 code paths). It is
+the cheapest way to find out the image can run the code before spending 8 GPU-hours. A failure
+stops the run with the error in the pre-flight cell's log.
+
+Once it passes, set `SMOKE = False` and commit again for the real run.
+
 ---
 
 ## 4. Expected timeline
