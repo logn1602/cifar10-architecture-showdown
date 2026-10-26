@@ -296,6 +296,20 @@ assert "True" in check.stdout, (
     "Something pulled a CPU wheel -- restart the session and remove the offending package."
 )
 print("\nextras installed, torch CUDA intact")
+
+# The versions this run actually uses. scripts/rehearse.ps1 rehearses this
+# environment locally from pinned versions -- if these differ, update its pins.
+import importlib
+from importlib import metadata
+importlib.invalidate_caches()
+print("\npackage versions after the install:")
+for dist in ("torch", "torchvision", "numpy", "timm", "scipy", "scikit-learn", "pandas",
+             "matplotlib", "seaborn", "umap-learn", "numba", "grad-cam", "pillow",
+             "opencv-python", "opencv-python-headless", "tensorboard", "psutil"):
+    try:
+        print(f"  {dist:<24} {metadata.version(dist)}")
+    except metadata.PackageNotFoundError:
+        print(f"  {dist:<24} (not installed)")
 '''),
 
     # --- cell 5 (code): 4. Pre-flight: what exists, and does the data pipeline reproduce?

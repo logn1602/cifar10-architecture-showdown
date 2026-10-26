@@ -1,0 +1,109 @@
+{
+    "passed":  true,
+    "started":  "2026-10-25T19:51:51",
+    "minutes":  23,
+    "python":  "3.10",
+    "torch_index":  "https://download.pytorch.org/whl/cpu",
+    "pins":  [
+                 "torch==2.0.0",
+                 "torchvision==0.15.1",
+                 "numpy==1.24.3",
+                 "timm==0.9.12",
+                 "setuptools==68.2.2",
+                 "filelock==3.12.2",
+                 "typing-extensions==4.8.0",
+                 "sympy==1.12",
+                 "networkx==3.2.1",
+                 "jinja2==3.1.2",
+                 "requests==2.31.0",
+                 "pillow==9.5.0",
+                 "huggingface-hub==0.19.4",
+                 "safetensors==0.4.1",
+                 "pyyaml==6.0.1",
+                 "scipy==1.11.4",
+                 "scikit-learn==1.2.2",
+                 "pandas==2.0.3",
+                 "matplotlib==3.7.3",
+                 "seaborn==0.12.2",
+                 "opencv-python==4.8.1.78",
+                 "umap-learn==0.5.4",
+                 "numba==0.58.1",
+                 "tqdm==4.66.1",
+                 "tensorboard==2.15.1",
+                 "psutil==5.9.5"
+             ],
+    "installed":  {
+                      "python":  "3.10.2",
+                      "torch":  "2.0.0+cpu",
+                      "torchvision":  "0.15.1+cpu",
+                      "numpy":  "1.24.3",
+                      "timm":  "0.9.12",
+                      "scipy":  "1.11.4",
+                      "scikit-learn":  "1.2.2",
+                      "pandas":  "2.0.3",
+                      "matplotlib":  "3.7.3",
+                      "seaborn":  "0.12.2",
+                      "opencv-python":  "4.8.1.78",
+                      "opencv-python-headless":  "4.11.0.86",
+                      "umap-learn":  "0.5.4",
+                      "numba":  "0.58.1",
+                      "pillow":  "9.5.0",
+                      "pyyaml":  "6.0.1",
+                      "tqdm":  "4.66.1",
+                      "tensorboard":  "2.15.1",
+                      "psutil":  "5.9.5",
+                      "grad-cam":  "1.5.7",
+                      "ttach":  "0.0.3",
+                      "setuptools":  "68.2.2"
+                  },
+    "steps":  [
+                  {
+                      "step":  "fresh Python 3.10 venv",
+                      "ok":  true,
+                      "seconds":  7.9,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "torch 2.0.0 + torchvision 0.15.1 (CPU builds)",
+                      "ok":  true,
+                      "seconds":  4.5,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "Kaggle image packages at their pinned versions",
+                      "ok":  true,
+                      "seconds":  5.1,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "the notebook\u0027s extras install, run with pip as the notebook runs it",
+                      "ok":  true,
+                      "seconds":  5,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "every .py in src/ and scripts/ compiles on Python 3.10",
+                      "ok":  true,
+                      "seconds":  0.2,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "GradScaler fallback on torch 2.0",
+                      "ok":  true,
+                      "seconds":  9,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "smoke_test.py --tiny (all six models + E2/E3/E4 paths, CPU)",
+                      "ok":  true,
+                      "seconds":  1123.6,
+                      "note":  ""
+                  },
+                  {
+                      "step":  "queue_selftest.py (real queue on toy runs, E5/E6/E7 included)",
+                      "ok":  true,
+                      "seconds":  226.7,
+                      "note":  ""
+                  }
+              ]
+}

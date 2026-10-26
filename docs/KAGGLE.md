@@ -105,6 +105,23 @@ somewhere around hour two of an eight-hour job.
 
 You can close the tab immediately. Progress is visible under the notebook's **Versions** tab.
 
+### Before that, locally: rehearse on Kaggle's pinned versions (~20–30 min, CPU)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\rehearse.ps1            # add -WithQueue for E5-E7
+```
+
+Builds a fresh Python 3.10 venv with torch 2.0.0 / torchvision 0.15.1 (CPU builds) and the
+rest of Kaggle's 2023 image at pinned versions. It then runs the notebook's own `pip install`
+line exactly as the notebook does, and fails if that install moves torch, torchvision or numpy. It
+compiles every file with Python 3.10, resolves the GradScaler fallback on torch 2.0, and runs
+`smoke_test.py --tiny` (with `-WithQueue`, `queue_selftest.py` too). The record goes to
+`results/rehearsal.json`. It cannot test CUDA; that is what the smoke run below is for.
+
+The pins are a reconstruction of the image. The notebook's install cell prints the versions
+Kaggle really ends up with, so compare that list with the pins in `scripts/rehearse.ps1`
+after a run and update them if they differ.
+
 ### Optional, recommended first: a smoke run (~10 min)
 
 Set `SMOKE = True` in the CONFIG cell and commit. The notebook probes the GPU, fetches the repo,

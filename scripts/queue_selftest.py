@@ -65,7 +65,10 @@ def launch(extra_env: dict) -> tuple[int, str, float]:
 
 
 def main() -> int:
-    argparse.ArgumentParser(description=__doc__.split("\n")[0]).parse_args()
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--summary", default="results/queue_selftest.json",
+                    help="where the JSON summary goes (default: the committed gate record)")
+    args = ap.parse_args()
     root = ROOT / TEST_ROOT
     shutil.rmtree(root, ignore_errors=True)
     save_json(PLAN, root / "plan.json")
@@ -149,9 +152,10 @@ def main() -> int:
         print(f"  [{'PASS' if passed else 'FAIL'}] {label}" + (f"  ({detail})" if detail else ""))
     print(f"\n{sum(c[1] for c in checks)}/{len(checks)} queue checks passed -- "
           f"{'ALL PASS' if ok else 'FAILURES ABOVE'}")
+    summary = Path(args.summary)
     save_json({"all_passed": ok, "checks": [{"check": c, "passed": p, "detail": d}
                                             for c, p, d in checks]},
-              ROOT / "results" / "queue_selftest.json")
+              summary if summary.is_absolute() else ROOT / summary)
     return 0 if ok else 1
 
 

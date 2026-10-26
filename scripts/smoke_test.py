@@ -26,6 +26,14 @@ decay / no-decay parameter split for every model.
 Run: ``python scripts/smoke_test.py``                 (all 6 models)
      ``python scripts/smoke_test.py --models mlp vit``
      ``python scripts/smoke_test.py --quick``          (CPU: caps val/test batches)
+     ``python scripts/smoke_test.py --tiny``           (minutes on a CPU; see below)
+
+``--tiny`` is for the pinned-environment rehearsal (``scripts/rehearse.ps1``),
+which asks whether the code *runs* on old library versions, not whether the
+models learn: 2% of the data, 2 val/test batches, shorter E2/E3 paths. Every
+code path still runs and every structural check still gates; the two
+learning checks (loss decreasing, accuracy above chance) need more steps than
+that to be reliable, so they are reported but do not gate.
 """
 
 from __future__ import annotations
@@ -44,7 +52,7 @@ import torch  # noqa: E402
 from src.models import MODEL_ORDER, build_model  # noqa: E402
 from src.train import build_param_groups, lr_at, train  # noqa: E402
 from src.utils import (  # noqa: E402
-    PROJECT_ROOT, ensure_dir, human_time, load_config, load_json, save_json,
+    PROJECT_ROOT, ensure_dir, human_time, load_config, load_json, resolve_path, save_json,
 )
 
 SPEC_METRIC_KEYS = [
@@ -139,8 +147,11 @@ def check_extra_paths(cfg: dict, out_root: Path, args) -> list[tuple[str, bool, 
     * **Step-defined runs** (E2): ``max_steps`` with a partial final epoch.
     """
     out: list[tuple[str, bool, str]] = []
-    common = dict(experiment="smoke_extra", lr=SMOKE_LR, fraction=0.1, warmup_fraction=0.2,
-                  num_workers=args.num_workers, max_eval_batches=2, keep_last=False)
+    common = dict(experiment="smoke_extra", lr=SMOKE_LR, fraction=args.fraction,
+                  warmup_fraction=0.2, num_workers=args.num_workers, max_eval_batches=2,
+                  keep_last=False)
+    # --tiny: still a partial final epoch for E2, still past one epoch for E3.
+    e3_steps, e2_steps = (8, 10) if args.tiny else (20, 40)
 
     def run(label: str, model: str, model_cfg: dict, **kw) -> None:
         d = out_root / "_extra" / label
@@ -159,10 +170,10 @@ def check_extra_paths(cfg: dict, out_root: Path, args) -> list[tuple[str, bool, 
 
     strong = cfg["augmentation"]["strong"]
     run("E3 strong augmentation (simple_cnn)", "simple_cnn",
-        load_config("configs/models/simple_cnn.yaml"), max_steps=20,
+        load_config("configs/models/simple_cnn.yaml"), max_steps=e3_steps,
         augmentation="strong", aug_cfg=strong)
     run("E2 step-defined run (vit, partial epoch)", "vit",
-        load_config("configs/models/vit.yaml"), max_steps=40)
+        load_config("configs/models/vit.yaml"), max_steps=e2_steps)
     e4 = cfg["experiments"]["e4_pretrained"]
     for name in e4["models"]:
         # Batch 64 as in the protocol on a GPU; 8 on a CPU, where 64 images at
@@ -198,13 +209,21 @@ def smoke_one(name: str, cfg: dict, out_root: Path, args) -> dict:
     shutil.rmtree(tb_dir, ignore_errors=True)
 
     kwargs = dict(
-        experiment="smoke", lr=SMOKE_LR, epochs=2, fraction=0.1,
+        experiment="smoke", lr=SMOKE_LR, epochs=2, fraction=args.fraction,
         augmentation="standard", save_checkpoints=True, keep_last=True, evaluate_test=True,
         tb_dir=tb_dir, num_workers=args.num_workers, warmup_fraction=0.2, ece_bins=int(cfg["eval"]["ece_bins"]),
         max_eval_batches=args.max_eval_batches,
     )
     checks: list[tuple[str, bool, str]] = []
+    notes: list[str] = []
     t0 = time.perf_counter()
+
+    def learning(label: str, ok: bool, detail: str) -> None:
+        """A check of whether the model learns: gated, except with --tiny."""
+        if args.tiny:
+            notes.append(f"{label}: {'yes' if ok else 'NO'} ({detail}) -- not gated with --tiny")
+        else:
+            checks.append((label, ok, detail))
 
     # 1) epoch 1, then "crash".
     first = train(name, model_cfg, cfg["train"], cfg["data"], 0, out_dir,
@@ -231,7 +250,7 @@ def smoke_one(name: str, cfg: dict, out_root: Path, args) -> dict:
                    str([r["epoch"] for r in hist])))
     if len(hist) == 2:
         l1, l2 = float(hist[0]["train_loss"]), float(hist[1]["train_loss"])
-        checks.append(("train loss decreasing", l2 < l1, f"{l1:.4f} -> {l2:.4f}"))
+        learning("train loss decreasing", l2 < l1, f"{l1:.4f} -> {l2:.4f}")
         # LR continuity: the last LR of epoch 2 must be what the schedule says
         # for the final step -- it would differ if the resume had restarted it.
         conf = load_json(out_dir / "metrics.json")
@@ -252,14 +271,14 @@ def smoke_one(name: str, cfg: dict, out_root: Path, args) -> dict:
     # FlopCounterMode fails, metrics.json records null and this test warns.
     nulls = [k for k in ("test_acc", "params", "ece", "infer_imgs_per_sec") if m.get(k) is None]
     checks.append(("core metrics non-null", not nulls, f"null: {nulls}" if nulls else ""))
-    checks.append(("test acc above chance", (m.get("test_acc") or 0) > 0.15,
-                   f"test_acc={m.get('test_acc')}"))
+    learning("test acc above chance", (m.get("test_acc") or 0) > 0.15,
+             f"test_acc={m.get('test_acc')}")
     warnings = []
     if m.get("flops") is None:
         warnings.append("FLOPs not counted, recorded as null (not a gate): "
                         f"{m.get('flops_error') or 'reason not recorded'}")
 
-    return {"model": name, "checks": checks, "warnings": warnings, "seconds": secs,
+    return {"model": name, "checks": checks, "warnings": warnings, "notes": notes, "seconds": secs,
             "test_acc": m.get("test_acc"), "best_val_acc": m.get("best_val_acc"),
             "train_imgs_per_sec": m.get("train_imgs_per_sec"),
             "sec_per_epoch": m.get("sec_per_epoch"),
@@ -279,12 +298,18 @@ def main() -> int:
     ap.add_argument("--extra-only", action="store_true",
                     help="run only the E2/E3/E4 code-path checks and merge them into "
                          "an existing results/smoke_test.json")
+    ap.add_argument("--tiny", action="store_true",
+                    help="2%% of the data and 2 val/test batches: does the code run, not does "
+                         "it learn (learning checks reported, not gated) -- for the rehearsal")
+    ap.add_argument("--summary", default="results/smoke_test.json",
+                    help="where the JSON summary goes (default: the committed gate record)")
     args = ap.parse_args()
-    args.max_eval_batches = 8 if args.quick else None
+    args.fraction = 0.02 if args.tiny else 0.1
+    args.max_eval_batches = 2 if args.tiny else (8 if args.quick else None)
 
     cfg = load_config("configs/base.yaml")
     out_root = ensure_dir(args.out)
-    summary_path = PROJECT_ROOT / "results" / "smoke_test.json"
+    summary_path = resolve_path(args.summary)
     results = []
     all_ok = True
 
@@ -343,6 +368,8 @@ def main() -> int:
                                                                (f"  {detail}" if detail else "")))
         for w in r.get("warnings", []):
             print(f"  [WARN] {w}")
+        for n in r.get("notes", []):
+            print(f"  [INFO] {n}")
         print(f"  -> {human_time(r['seconds'])}", flush=True)
 
     if not args.skip_extra:
@@ -355,7 +382,7 @@ def main() -> int:
 
     n = sum(len(r["checks"]) for r in results)
     n_ok = sum(ok for r in results for _, ok, _ in r["checks"])
-    save_json({"all_passed": bool(all_ok), "quick": args.quick,
+    save_json({"all_passed": bool(all_ok), "quick": args.quick, "tiny": args.tiny,
                "device": "cuda" if torch.cuda.is_available() else "cpu",
                "results": [{**r, "checks": [{"check": c, "passed": ok, "detail": d}
                                             for c, ok, d in r["checks"]]} for r in results]},

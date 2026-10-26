@@ -73,3 +73,6 @@ results/_eval_test/
 
 # CPU test of the report builder (scripts/report_selftest.py); synthetic numbers.
 results/_report_test/
+
+# Rehearsal scratch (scripts/rehearse.ps1); results/rehearsal.json is kept.
+results/_rehearsal/
