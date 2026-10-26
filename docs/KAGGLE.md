@@ -1,7 +1,9 @@
 # Running the showdown on Kaggle (2× T4)
 
-This laptop has no usable training GPU — an MX330 with 2 GB VRAM, where ResNet-18 at batch 128
-would OOM before the first epoch finished. So the plan follows spec §1.4 and §12.6:
+This laptop has no usable training GPU — an MX330 with 2 GB VRAM, where the largest models
+(MLP-Mixer, ConvNeXt-mini) are unlikely to fit at the protocol's batch of 128; see the
+[README](../README.md#hardware-why-training-happens-on-kaggle). So the plan follows spec §1.4 and
+§12.6:
 
 1. build and smoke-test everything **locally on CPU** (Phases 0–3);
 2. run the real queue on **Kaggle with 2× T4** via `kaggle_runner.ipynb`;

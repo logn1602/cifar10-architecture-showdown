@@ -2,19 +2,23 @@
 
 > **Status: the 9-hour run is done; the write-up is in progress.** The 9h queue ran on Kaggle
 > (2× T4) on 2026-10-26 and every job finished, including the first upgrade (E3 for ResNet-18 and
-> ViT). The [results](#results-9h-run) below come from that run. Every number in them and in the
-> [caveats](#caveats-which-will-also-appear-in-the-final-report) that comes from the run is filled
-> in by `scripts/make_report.py` from its saved outputs, not typed by hand. The run's outputs
-> themselves are not committed to this repo.
+> ViT). The [results](#results-9h-run) below come from that run. In them and in the
+> [caveats](#caveats-which-will-also-appear-in-the-final-report), the run's numbers are filled in
+> by `scripts/make_report.py` from its saved outputs; the wording around them is written by hand.
+> The run's outputs are not committed to this repo. They are in the
+> [v1.0 release](https://github.com/logn1602/cifar10-architecture-showdown/releases/tag/v1.0) as
+> `results_light.zip` (no model checkpoints), and `make_report.py` rebuilds the full report, and
+> every run number in this README, from that file.
 
 Six neural network architectures spanning roughly 35 years of computer vision, trained **from
 scratch on CIFAR-10 under identical conditions**, to answer one question properly: how much of a
 modern architecture's advantage is the architecture, and how much is just data?
 
-The headline experiment starves each model of data (100% of the training set down to 10% in the 9h
-run, and to 5% in the full protocol, at matched optimization steps) to test the standard claim that
-Transformers are not *worse* than CNNs on small data, they are *hungrier* — because they carry
-almost no inductive bias about images and have to learn from data what a convolution gets for free.
+The headline experiment starves each model of data (from 100% of the training set down to 10% in
+the 9h run, at matched optimization steps) to test the standard claim that Transformers are
+not *worse* than CNNs on small data, they are *hungrier* — because they carry almost no inductive
+bias about images and have to learn from data what a convolution gets for free. The full protocol
+goes down to 5%; that has not been run.
 
 Full spec: [`CIFAR10_ARCHITECTURE_SHOWDOWN.md`](CIFAR10_ARCHITECTURE_SHOWDOWN.md).
 
@@ -71,8 +75,8 @@ for early stopping. See [`configs/base.yaml`](configs/base.yaml), which encodes 
 
 ## Results (9h run)
 
-E1 test accuracy, trained from scratch (<!-- n:e1.seeds -->1<!-- /n --> seed,
-<!-- n:e1.epochs -->100<!-- /n --> epochs, best-validation checkpoint):
+E1 test accuracy, trained from scratch (<!-- n:e1.seeds -->1<!-- /n --> seed, <!-- n:e1.epochs -->100<!-- /n -->
+epochs, best-validation checkpoint):
 
 <!-- block:e1_scoreboard_short -->
 | rank | model | test acc (%) | params (M) | GFLOPs/img | train time (h) |
@@ -92,14 +96,14 @@ E1 test accuracy, trained from scratch (<!-- n:e1.seeds -->1<!-- /n --> seed,
   hypothesis predicts.
 - **E5:** Noise is the worst corruption for all three CNNs. MLP keeps the largest share of its
   clean accuracy, but it also has the lowest corrupted accuracy of any model, so that isn't a win.
-- **E6:** Under pixel shuffle, ResNet-18, Simple CNN and ConvNeXt-mini all keep only about
-  <!-- n:e6.cnn.pixel.keep -->18<!-- /n -->% of their clean accuracy, averaged over the three grid
-  sizes.
+- **E6:** Under pixel shuffle, ResNet-18, Simple CNN and ConvNeXt-mini all keep only
+  about <!-- n:e6.cnn.pixel.keep -->18<!-- /n -->% of their clean accuracy, averaged over the three
+  grid sizes.
 - **E6 (ViT):** ViT keeps about <!-- n:e6.vit.patch_8x8.keep -->61<!-- /n -->% of its clean
   accuracy under the 8×8 patch shuffle, but that's partly because the grid lines up with its
   4-pixel patches, so none of them get cut. So it shows ViT depends on patch positions less than
-  the CNNs depend on layout, not that ViT is robust: it still drops from
-  <!-- n:e6.vit.clean -->80.2<!-- /n -->% to <!-- n:e6.vit.patch_8x8 -->49.3<!-- /n -->%.
+  the CNNs depend on layout, not that ViT is robust: it still drops
+  from <!-- n:e1.vit.acc -->80.1<!-- /n -->% to <!-- n:e6.vit.patch_8x8 -->49.3<!-- /n -->%.
 - **E7:** ConvNeXt-mini and ResNet-18 are basically tied on how cleanly their features separate
   the classes.
 - **E4:** Pretrained ViT hits <!-- n:e4.vit_small_patch16_224.acc -->98.2<!-- /n -->%, but
@@ -123,9 +127,11 @@ E1 test accuracy, trained from scratch (<!-- n:e1.seeds -->1<!-- /n --> seed,
 | Local PyTorch | 2.14.1+cpu / torchvision 0.29.1+cpu |
 | DataLoader | **8,350 img/s at `num_workers=4`** (5.4 s per 45k epoch) |
 
-An MX330 has 2 GB of VRAM. ResNet-18 at batch 128 with AMP needs roughly 2.5–3 GB for activations
-alone on 32×32 input, and ViT/ConvNeXt need more — so the protocol's batch size cannot run here at
-all, and changing the batch size would break the fairness protocol.
+An MX330 has 2 GB of VRAM. Measured on CPU, with and without mixed precision, the activations each
+model keeps for the backward pass at the protocol's batch of 128 come to roughly 0.6–0.7 GB for
+ResNet-18, but 1.2–1.8 GB for MLP-Mixer and 1.5–2.3 GB for ConvNeXt-mini, before the weights,
+optimizer state and CUDA's own overhead. So the largest models are unlikely to fit at the
+protocol's batch size, and changing the batch size would break the fairness protocol.
 
 So the split is: **build and verify locally on CPU, train on Kaggle with 2× T4.**
 
@@ -133,8 +139,8 @@ So the split is: **build and verify locally on CPU, train on Kaggle with 2× T4.
 wall-clock on 2× T4** and does *not* fit an 8 h budget on a single T4. Full mode is a **multi-day**
 job (>100 GPU-hours) — see `results/tables/compute_estimate.md`. These are estimates; on Kaggle,
 `scripts/plan_budget.py` times the real T4s first and fits the queue to the budget from those.
-The real 9h run used <!-- n:compute.queue_gpu_hours -->11.2<!-- /n --> GPU-hours and finished in
-<!-- n:compute.wall_clock -->5h 42m 17s<!-- /n --> of wall clock, core queue plus one upgrade.
+The real 9h run used <!-- n:compute.queue_gpu_hours -->11.2<!-- /n --> GPU-hours and finished
+in <!-- n:compute.wall_clock -->5h 42m 17s<!-- /n --> of wall clock, core queue plus one upgrade.
 
 See [`docs/KAGGLE.md`](docs/KAGGLE.md) for the step-by-step, and
 [`kaggle_runner.ipynb`](kaggle_runner.ipynb) for the runner notebook.
@@ -149,6 +155,13 @@ See [`docs/KAGGLE.md`](docs/KAGGLE.md) for the step-by-step, and
 ---
 
 ## Reproduce what exists today
+
+Training needs a GPU in practice. `run_all.py` in step 5 trains every model, and this project runs
+it on Kaggle with 2× T4 through [`kaggle_runner.ipynb`](kaggle_runner.ipynb) (see
+[`docs/KAGGLE.md`](docs/KAGGLE.md)). It also runs on a CPU, but by a rough estimate the 9h queue
+would take weeks there. Step 6 needs the checkpoints that training writes, and the queue runs it
+too. Everything else below runs on a CPU; to train on your own GPU, install a CUDA build of PyTorch
+in step 1.
 
 ```powershell
 # 0. Clone
@@ -188,7 +201,7 @@ python -m src.interpret.e7                  # interpretability figures
 
 # 7. Phase 9 -- report: tables, figures, REPORT.md and the numbers in this README
 python scripts/make_report.py               # Kaggle results unzipped into results/
-# or, with the results kept outside the repo:
+# or, with the results kept outside the repo (e.g. results_light.zip from the v1.0 release):
 $env:SHOWDOWN_RESULTS = "C:\path\to\results"; python scripts/make_report.py --docs README.md
 ```
 
@@ -261,9 +274,9 @@ Three decisions in `src/data.py` that the rest of the project depends on:
 - **E2 is step-matched but short** (<!-- n:e2.steps -->7,040<!-- /n --> steps), so absolute E2
   accuracies sit below E1's.
 - **LRs were auto-picked**, and every model's pick, ViT's included, was at the edge of the sweep.
-- **ViT's <!-- n:e1.vit.acc2 -->80.13<!-- /n -->% is the number to use**; the
-  <!-- n:e5.vit.clean2 -->80.15<!-- /n -->% (shown as <!-- n:e5.vit.clean -->80.2<!-- /n -->%) in
-  the E5/E6 tables is a re-scoring difference of a few images. The MLP has the same gap
+- **ViT's <!-- n:e1.vit.acc2 -->80.13<!-- /n -->% is the number to use**; the <!-- n:e5.vit.clean2 -->80.15<!-- /n -->%
+  (shown as <!-- n:e5.vit.clean -->80.2<!-- /n -->%) in the E5/E6 tables is a re-scoring
+  difference of a few images. The MLP has the same gap
   (<!-- n:e1.mlp.acc2 -->66.77<!-- /n -->% vs <!-- n:e5.mlp.clean2 -->66.74<!-- /n -->%).
 - Everything here is 32×32 images, small models, one dataset. None of it generalises to ImageNet
   without checking.
