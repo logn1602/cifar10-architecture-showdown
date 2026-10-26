@@ -217,6 +217,37 @@ It reports any experiment or figure that is missing rather than failing, so it i
 a queue that did not finish. `python scripts/report_selftest.py` checks it end to end on
 synthetic results.
 
+### If the queue stopped before the end
+
+Resuming needs the earlier version's output, so check its **Output** tab first. A version that
+ended normally keeps its output even if runs failed or upgrades were dropped for time. So does
+one whose queue crashed, because the packaging cell still runs. A version that Kaggle stopped at
+its session limit may keep nothing (users report an empty Output tab after the 12-hour cutoff),
+which is one more reason `BUDGET_HOURS` stays well under it. To pick up where a version stopped:
+
+1. In the notebook editor, **Add Input → Notebooks → this notebook**, and check that the attached
+   version is the one that stopped. Its output appears under `/kaggle/input/`.
+2. Commit again (**Save & Run All**) with `SMOKE = False`.
+
+The pre-flight cell runs `scripts/kaggle_inputs.py restore`. It looks for the earlier `results/`
+in the attached output: the folder itself, `results.zip` and `results_light.zip`. It copies the
+one with the most finished runs into `results/`, taking `results.zip` on a tie because the
+packaging cell always writes it whole. Then it prints what the queue will skip:
+
+```
+Resume: found /kaggle/input/<notebook>/results.zip (zip, <n> finished runs, with checkpoints)
+Resume: restored <files> files from /kaggle/input/<notebook>/results.zip into /kaggle/working/cifar10-architecture-showdown/results
+Resume: <n> of the 113 jobs in the 9h queue (every upgrade included) are already complete; the queue will skip them.
+```
+
+From there nothing new happens: the queue skips finished runs by its usual test (`metrics.json`
+with `status: completed`, or `done.json` for E5–E7), runs that stopped part-way resume from
+`last.pt`, and diverged runs are not retried. The planner budgets only the work that is left.
+Failure logs and scratch are not restored, so failed runs are retried. Restore from the full
+output, not `results_light.zip` alone: it has no checkpoints, so partial runs would restart and
+E5–E7 could not evaluate the E1 runs (the log warns if so). With nothing attached the cell prints
+`starting from scratch`. `python scripts/kaggle_inputs_selftest.py` covers every case on CPU.
+
 ---
 
 ## 6. Troubleshooting
@@ -229,7 +260,7 @@ synthetic results.
 | `pip install` fails, no network | Internet toggle off | Settings → Internet → On. Note this also blocks the CIFAR-10 download |
 | `CIFAR-10: skipping the attached copy at … fails its md5 check` | The attached dataset is not the official python version, or is incomplete | Nothing — the notebook downloads instead. Attach a different copy next time to skip the download |
 | `torch lost CUDA after the pip install` | Something pulled a CPU torch wheel | Restart the session. Never add `torch` to the install list — Kaggle ships its own CUDA build |
-| Session ends mid-queue | Hit the per-session time limit | The queue is resumable: re-run the notebook. Runs with an existing `metrics.json` are skipped and partial runs resume from `last.pt` — but only if `/kaggle/working` persisted, so prefer lowering `BUDGET_HOURS` |
+| Session ends mid-queue | Hit the per-session time limit | Kaggle may keep no output from a version stopped at its limit, so keep `BUDGET_HOURS` well under it. If that version's Output tab does list files, attach it and commit again (§5, "If the queue stopped before the end"): finished runs are skipped and partial runs resume from `last.pt` |
 | `OSError: No space left on device` | Checkpoints filled `/kaggle/working` | LR-sweep runs save no checkpoints and other runs keep only `best.pt`; if it still fills, drop `last.pt` retention or cut E1 seeds |
 | `FileNotFoundError: ...MD not found under /kaggle/input` | Dataset not attached, or zipped with an extra top-level folder | Add Input → Datasets; or set `DATASET_SLUG` explicitly |
 | Notebook "succeeded" but `results/` is empty | A `!`-magic cell failed silently | Already handled — every step runs through `subprocess` with an exit-code check. If you add cells, keep that pattern |

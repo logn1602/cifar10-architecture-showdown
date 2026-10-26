@@ -75,6 +75,7 @@ experiments, trimmed seeds and epochs per spec Section 12.
 | **Accelerator** | **GPU T4 × 2** | The queue is split across both GPUs. On 1× T4 the core does **not** fit in 8 h. |
 | **Internet** | **ON** | Needed for `pip install`, the E4 pretrained weights, and the CIFAR-10 download unless a copy is attached. |
 | **Input** (optional) | A CIFAR-10 dataset, python version | **Add Input** → search "CIFAR-10 Python". Used instead of the 170 MB download when every file passes its md5 check; the pre-flight log prints which path it used. |
+| **Input** (only to resume) | An earlier version's output | To continue a version that left runs unfinished: **Add Input** → *Notebooks* → this notebook → that version, then commit again. Every run it finished is skipped. Leave it off for a fresh run. |
 | **Environment** | **Always use latest environment** | A notebook pinned to its original environment can get a 2023 image (Python 3.10, PyTorch 2.0). The code still runs there, but the latest environment has a current PyTorch. |
 | **Persistence** | Files only (optional) | Not required; everything lands in `/kaggle/working`. |
 
@@ -361,6 +362,12 @@ else:
 
     assert not missing, f"Missing {missing} -- is the clone at the right commit?"
 
+    # Resume: if an earlier version's output is attached (Add Input ->
+    # Notebooks), its results/ is copied in first, so the planner budgets only
+    # what is left and the queue skips every finished run. Before the gates
+    # below, so they still write this session's records over the old ones.
+    run([PY, "scripts/kaggle_inputs.py", "restore"])
+
     run([PY, "scripts/env_check.py"])
     run([PY, "-m", "src.data"])
     run([PY, "scripts/check_data.py", "--quick"])
@@ -529,6 +536,10 @@ else:
 
 > After a **SMOKE** run there is nothing to download: read the pre-flight cell's log (or
 > `results/smoke_test.json` in the output), then set `SMOKE = False` and commit again.
+
+> **Runs left unfinished** (failed, or dropped for time)? Attach this version's output (**Add
+> Input** → *Notebooks* → this notebook → this version) and commit again. The pre-flight cell
+> restores `results/` from it, and only the unfinished runs train.
 
 1. **Download the archives** from the Output tab of the committed version:
    - `results_light.zip` — tables, figures, metrics, logs. This is what Phase 9 needs.
