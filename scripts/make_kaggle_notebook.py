@@ -526,6 +526,12 @@ else:
         print(f"{len(logs)} failed run(s):")
         for f in logs:
             print(f"  - {f.name}")
+
+# What this version saves: /kaggle/working, which Kaggle may cap at ~500 files.
+# The exact count and each top-level folder's, then the repo clone's breakdown.
+print("\n" + "=" * 78 + "\n  Output file census\n" + "=" * 78)
+run([PY, "scripts/kaggle_outputs.py", "census",
+     "--output", "/kaggle/working", "--work-dir", str(WORK_DIR)], check=False)
 '''),
 
     # --- cell 10 (markdown): 📥 When you get back

@@ -79,3 +79,6 @@ results/_rehearsal/
 
 # Fake /kaggle/input trees (scripts/kaggle_inputs_selftest.py).
 results/_inputs_test/
+
+# Fake /kaggle/working trees (scripts/kaggle_outputs_selftest.py).
+results/_outputs_test/

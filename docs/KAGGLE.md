@@ -154,6 +154,11 @@ stops the run with the error in the pre-flight cell's log.
 
 Once it passes, set `SMOKE = False` and commit again for the real run.
 
+Every run, smoke or real, ends with a census of `/kaggle/working`, the version's saved output.
+Kaggle may cap that output at about 500 files (community reports; not documented). The last cell
+prints the exact file count and each top-level folder's count, then the same breakdown for the
+repo clone, and warns past 400 files.
+
 ---
 
 ## 4. Expected timeline
