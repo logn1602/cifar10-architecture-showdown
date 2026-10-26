@@ -33,8 +33,9 @@ REPO_URL = "https://github.com/logn1602/cifar10-architecture-showdown.git"
 ```
 
 Internet must be **On** (Settings → Internet) or the clone fails. `data/` is gitignored, so the
-clone is small and CIFAR-10 is downloaded fresh on Kaggle — which is what makes the split
-fingerprint check in §5 meaningful.
+clone is small. Kaggle gets CIFAR-10 itself, from an attached copy or a fresh download (§2), and
+regenerates the 45k/5k split from it, which is what makes the split fingerprint check in §5
+meaningful.
 
 ### Option B — upload as a Kaggle Dataset
 
@@ -65,9 +66,9 @@ more than one copy attached.
 
 In the notebook editor, attach it with **Add Input → Datasets → your dataset**.
 
-> Excluding `data/` is deliberate: Kaggle re-downloads CIFAR-10 itself, and the 45k/5k split is
-> regenerated from scratch. The sha256 fingerprints printed by `check_data.py` are how you verify
-> the regenerated split matches your local one — see §5 below.
+> Excluding `data/` is deliberate: Kaggle gets CIFAR-10 itself (an attached copy or the download,
+> §2), and the 45k/5k split is regenerated from scratch. The sha256 fingerprints printed by
+> `check_data.py` are how you verify the regenerated split matches your local one — see §5 below.
 
 ---
 
@@ -83,6 +84,26 @@ In the notebook editor, attach it with **Add Input → Datasets → your dataset
 | Language | Python |
 
 Internet must be on for `pip install`, the CIFAR-10 download, and the E4 pretrained weights.
+
+### Optional: attach CIFAR-10 instead of downloading it
+
+The download is 170 MB from cs.toronto.edu, and it can be slow: the local test took 15 minutes.
+To skip it, attach a dataset that holds the official python version: **Add Input → Datasets**,
+search "CIFAR-10 Python" (for example `pankrzysiu/cifar10-python`). Any dataset works if it has
+`cifar-10-batches-py/` or `cifar-10-python.tar.gz` somewhere inside it.
+
+The pre-flight cell runs `scripts/kaggle_inputs.py cifar`, in the smoke run too. It copies the
+attached files into `data/` and checks each one against torchvision's md5 checksums, so they are
+byte-identical to a download and the split fingerprints do not change. If a copy fails the check,
+the log names the failing file and the notebook downloads instead. The log always says which path
+it used:
+
+```
+CIFAR-10: using the attached copy at /kaggle/input/cifar10-python/cifar-10-batches-py
+          -> /kaggle/working/cifar10-architecture-showdown/data/cifar-10-batches-py (every file md5-verified against torchvision)
+```
+
+Internet still has to be on, for `pip install` and the E4 weights.
 
 A notebook pinned to its original environment can be handed a 2023 image (Python 3.10, PyTorch
 2.0) — that is what the first runs got. The code is kept compatible with PyTorch 2.0 and Python
@@ -206,6 +227,7 @@ synthetic results.
 | `[ WARN ] FLOPs counted … not counted, recorded as null` | This PyTorch build's `FlopCounterMode` cannot count the models (it failed for all six on Kaggle's Python 3.10 image) | Nothing — it is a warning, not a gate, and the line says why. FLOPs depend only on the architecture and input size, so the local counts in `results/tables/model_summary.md` apply; the Kaggle copy of that file will show `n/a` |
 | "Only 1 GPU allocated" warning | Kaggle gave a single T4 (quota or availability) | Restart the session; if it persists, the core will overrun 8 h — lower `BUDGET_HOURS` and accept fewer upgrades |
 | `pip install` fails, no network | Internet toggle off | Settings → Internet → On. Note this also blocks the CIFAR-10 download |
+| `CIFAR-10: skipping the attached copy at … fails its md5 check` | The attached dataset is not the official python version, or is incomplete | Nothing — the notebook downloads instead. Attach a different copy next time to skip the download |
 | `torch lost CUDA after the pip install` | Something pulled a CPU torch wheel | Restart the session. Never add `torch` to the install list — Kaggle ships its own CUDA build |
 | Session ends mid-queue | Hit the per-session time limit | The queue is resumable: re-run the notebook. Runs with an existing `metrics.json` are skipped and partial runs resume from `last.pt` — but only if `/kaggle/working` persisted, so prefer lowering `BUDGET_HOURS` |
 | `OSError: No space left on device` | Checkpoints filled `/kaggle/working` | LR-sweep runs save no checkpoints and other runs keep only `best.pt`; if it still fills, drop `last.pt` retention or cut E1 seeds |

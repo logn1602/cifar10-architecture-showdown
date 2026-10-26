@@ -73,7 +73,8 @@ experiments, trimmed seeds and epochs per spec Section 12.
 | Setting | Value | Why |
 |---|---|---|
 | **Accelerator** | **GPU T4 × 2** | The queue is split across both GPUs. On 1× T4 the core does **not** fit in 8 h. |
-| **Internet** | **ON** | Needed for `pip install`, the CIFAR-10 download, and the E4 pretrained weights. |
+| **Internet** | **ON** | Needed for `pip install`, the E4 pretrained weights, and the CIFAR-10 download unless a copy is attached. |
+| **Input** (optional) | A CIFAR-10 dataset, python version | **Add Input** → search "CIFAR-10 Python". Used instead of the 170 MB download when every file passes its md5 check; the pre-flight log prints which path it used. |
 | **Environment** | **Always use latest environment** | A notebook pinned to its original environment can get a 2023 image (Python 3.10, PyTorch 2.0). The code still runs there, but the latest environment has a current PyTorch. |
 | **Persistence** | Files only (optional) | Not required; everything lands in `/kaggle/working`. |
 
@@ -322,11 +323,17 @@ for dist in ("torch", "torchvision", "numpy", "timm", "scipy", "scikit-learn", "
 # regenerated here rather than shipped -- these hashes are the proof that
 # "val accuracy" means the same thing on both machines.
 #
-# With SMOKE = True this cell runs only the GPU smoke test, and every cell
-# after it skips itself.
+# With SMOKE = True this cell fetches CIFAR-10 and runs only the GPU smoke
+# test, and every cell after it skips itself.
 # =============================================================================
 import os
 os.chdir(WORK_DIR)
+
+# CIFAR-10: an attached Kaggle Dataset holding the official python version
+# (cifar-10-batches-py/ or cifar-10-python.tar.gz) is copied into data/ and
+# md5-checked file by file; with none attached, it is downloaded. Either way
+# the bytes -- and so the split -- are the same. The log says which path it used.
+run([PY, "scripts/kaggle_inputs.py", "cifar"])
 
 if SMOKE:
     # Every model through the real training loop on the T4 -- fp16 autocast,

@@ -76,3 +76,6 @@ results/_report_test/
 
 # Rehearsal scratch (scripts/rehearse.ps1); results/rehearsal.json is kept.
 results/_rehearsal/
+
+# Fake /kaggle/input trees (scripts/kaggle_inputs_selftest.py).
+results/_inputs_test/
