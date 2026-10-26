@@ -28,7 +28,12 @@ depends only on the architecture and input size, and ``FlopCounterMode`` failed
 on one Kaggle image, so Kaggle's ``metrics.json`` may hold ``flops: null``.
 
 Missing experiments are reported as missing, never filled in, so the script is
-safe to run on a partial queue.
+safe to run on a partial queue. A partly run experiment (E3 on fewer than six
+models) says so in its heading and takeaway.
+
+No takeaway calls a gap a win when one seed cannot separate it: under
+``NOISE_PP`` it is a tie, up to ``NEAR_PP`` a near-tie, and tied models are
+named together rather than one of them picked as the winner.
 
 Run: ``python scripts/make_report.py``
      ``SHOWDOWN_RESULTS=results/_report_test python scripts/make_report.py``
@@ -64,6 +69,8 @@ PATCH_FAMILY = ("vit", "mlp_mixer")
 
 # Spec 12.7: with one seed, gaps under ~1 percentage point are noise.
 NOISE_PP = 1.0
+# Gaps from NOISE_PP up to NEAR_PP are near-ties: still too close to call a win.
+NEAR_PP = 1.5
 
 # E4 pretrained model -> the from-scratch model it is compared with.
 E4_COUNTERPART = {"vit_small_patch16_224": "vit", "resnet50": "resnet18"}
@@ -117,7 +124,7 @@ def load_runs(root: Path) -> dict[str, list[dict]]:
             elif exp == "E2" and len(parts) == 4:
                 r.update(model=parts[1], fraction=_num(parts[2]), seed=int(parts[3]))
             elif exp == "E4" and len(parts) == 3:
-                r.update(model=parts[1], seed=int(parts[2]))
+                r.update(model=parts[1], seed=int(parts[2]), timm_name=m.get("model"))
             elif exp in ("lr_sweep", "E4_sweep") and len(parts) == 3:
                 r.update(model=parts[1], lr=_num(parts[2]))
             else:
@@ -169,6 +176,56 @@ def models_in(runs: list[dict]) -> list[str]:
     return [m for m in MODEL_ORDER if m in present]
 
 
+def join(words: list[str]) -> str:
+    """``"A"``, ``"A and B"``, ``"A, B and C"``."""
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+
+
+def tie_note(spread_pp: float, noise: float = NOISE_PP) -> str:
+    """``"effectively tied"`` inside the noise band, ``"a near-tie"`` up to
+    ``NEAR_PP`` past it, and ``""`` for a gap one seed can call."""
+    if spread_pp < noise:
+        return "effectively tied"
+    return "a near-tie" if spread_pp < noise + NEAR_PP - NOISE_PP else ""
+
+
+def close_to_extreme(vals: dict[Any, float], highest: bool = True) -> list:
+    """Keys within the near-tie band of the highest (or lowest) value, extreme first.
+
+    Values are in points (accuracies and shares x100), so the pp bands apply.
+    """
+    order = sorted(vals, key=vals.get, reverse=highest)
+    return [k for k in order if abs(vals[k] - vals[order[0]]) < NEAR_PP]
+
+
+def ranked_group(cfg: dict, vals: dict[str, float], highest: bool = True, nd: int = 0,
+                 unit: str = "%", div: float = 1.0) -> tuple[list[str], str]:
+    """The model(s) at one extreme of ``vals`` and how to name them: ``"ViT (61%)"``,
+    or tied models in model order, e.g. ``"Simple CNN and ResNet-18 (21% and 22%,
+    effectively tied)"``. Shown values are ``vals / div`` to ``nd`` decimals."""
+    group = close_to_extreme(vals, highest)
+    shown = {m: f"{vals[m] / div:.{nd}f}" for m in group}
+    if len(group) == 1:
+        return group, f"{label(cfg, group[0])} ({shown[group[0]]}{unit})"
+    spread = max(vals[m] for m in group) - min(vals[m] for m in group)
+    group = sorted(group, key=MODEL_ORDER.index)
+    vs = [shown[m] for m in group]
+    value = f"{vs[0]}{unit} each" if len(set(vs)) == 1 else join([v + unit for v in vs])
+    return group, f"{join([label(cfg, m) for m in group])} ({value}, {tie_note(spread)})"
+
+
+def run_model_cfg(e1: list[dict], m: str) -> dict:
+    """The model config one of ``m``'s own E1 runs was trained with (its
+    ``config.yaml``), or the repo default for ``m`` when no run saved one."""
+    run = next((r for r in e1 if r["model"] == m), None)
+    if run is not None and (Path(run["dir"]) / "config.yaml").exists():
+        with (Path(run["dir"]) / "config.yaml").open(encoding="utf-8") as fh:
+            mc = (yaml.safe_load(fh) or {}).get("model_cfg") or {}
+        if mc.get("model", mc):
+            return mc.get("model", mc)
+    return load_config(f"configs/models/{m}.yaml")["model"]
+
+
 def local_flops(e1: list[dict]) -> dict[str, int | None]:
     """FLOPs per image for the six models, counted on this machine.
 
@@ -179,20 +236,30 @@ def local_flops(e1: list[dict]) -> dict[str, int | None]:
     import torch
     cpu = torch.device("cpu")
     for m in MODEL_ORDER:
-        run = next((r for r in e1 if r["model"] == m), None)
-        model_cfg = None
-        if run is not None and (Path(run["dir"]) / "config.yaml").exists():
-            with (Path(run["dir"]) / "config.yaml").open(encoding="utf-8") as fh:
-                mc = (yaml.safe_load(fh) or {}).get("model_cfg") or {}
-            model_cfg = mc.get("model", mc) or None
-        if model_cfg is None:
-            model_cfg = load_config(f"configs/models/{m}.yaml")["model"]
-        value, err = try_count_flops(build_model(m, model_cfg), cpu)
+        value, err = try_count_flops(build_model(m, run_model_cfg(e1, m)), cpu)
         if value is None:
-            value = (run or {}).get("flops")
+            value = next((r.get("flops") for r in e1 if r["model"] == m), None)
             print(f"  ! local FLOP count failed for {m} ({err}); using the run's value {value}")
         flops[m] = value
     return flops
+
+
+def patch_grid(e1: list[dict]) -> dict[str, tuple[int, int]]:
+    """``{model: (patch size, image size)}`` in pixels for the patch models, as trained."""
+    out = {}
+    for m in PATCH_FAMILY:
+        mc = run_model_cfg(e1, m)
+        if mc.get("patch_size"):
+            out[m] = (int(mc["patch_size"]), int(mc.get("img_size", 32)))
+    return out
+
+
+def pretrain_data(timm_name: str | None) -> str | None:
+    """Pretraining set named by a timm weight tag (``...augreg_in21k_ft_in1k``)."""
+    tag = (timm_name or "").lower()
+    if "in21k" in tag or "in22k" in tag:
+        return "ImageNet-21k"
+    return "ImageNet-1k" if "in1k" in tag else None
 
 
 # ---------------------------------------------------------------------------
@@ -409,10 +476,15 @@ def e1_takeaway(cfg: dict, rows: list[dict]) -> str:
     if second:
         gap = 100 * (best["test_acc"] - second["test_acc"])
         noise = max(NOISE_PP, 2 * 100 * max(best["test_acc_std"], second["test_acc_std"]))
-        if gap < noise:
+        close = tie_note(gap, noise)
+        if close == "effectively tied":
             s.append(f"Its lead over {second['label']} ({pct(second['test_acc'])}%) is "
                      f"{gap:.1f} pp, which is inside the noise band (< {noise:.1f} pp), so "
                      "the top two are effectively tied.")
+        elif close:
+            s.append(f"Its lead over {second['label']} ({pct(second['test_acc'])}%) is only "
+                     f"{gap:.1f} pp, just outside the {noise:.1f} pp noise band, so the top two "
+                     "are a near-tie, not a win.")
         else:
             s.append(f"It leads {second['label']} by {gap:.1f} pp.")
     by = {r["model"]: r for r in rows}
@@ -434,8 +506,19 @@ def e1_takeaway(cfg: dict, rows: list[dict]) -> str:
         front.sort(key=lambda r: r["flops"])
         s.append("On accuracy vs. compute, the models no other model beats on both counts are "
                  + ", ".join(f"{r['label']} ({r['flops'] / 1e9:.2f} GFLOPs, {pct(r['test_acc'])}%)"
-                             for r in front) + "; every other model pays more compute for less "
-                 "accuracy than one of these.")
+                             for r in front) + "; every other model needs more compute than one "
+                 "of these for the same or lower accuracy.")
+        # A place on that list won only by a near-tie over a cheaper model is not a real one.
+        for r in front:
+            cheaper = [o for o in eff if o["flops"] < r["flops"] and o["test_acc"] < r["test_acc"]]
+            if cheaper:
+                o = max(cheaper, key=lambda o: o["test_acc"])
+                gap = 100 * (r["test_acc"] - o["test_acc"])
+                close = tie_note(gap, max(NOISE_PP, 2 * 100 * max(r["test_acc_std"],
+                                                                   o["test_acc_std"])))
+                if close:
+                    s.append(f"{r['label']} is on that list only by its {gap:.1f} pp edge over "
+                             f"the cheaper {o['label']}, which is {close}.")
     return " ".join(s)
 
 
@@ -444,12 +527,16 @@ def e1_takeaway(cfg: dict, rows: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def lr_section(cfg: dict, sweep: list[dict], root: Path) -> str:
-    choice = {}
+def lr_picks(root: Path) -> dict:
+    """The auto-picked LR per model (``lr_choice_<mode>.json``), or ``{}``."""
     for name in ("lr_choice_9h.json", "lr_choice_full.json"):
         if (root / name).exists():
-            choice = load_json(root / name).get("picks", {})
-            break
+            return load_json(root / name).get("picks", {})
+    return {}
+
+
+def lr_section(cfg: dict, sweep: list[dict], root: Path) -> str:
+    choice = lr_picks(root)
     if not sweep and not choice:
         return "_No LR sweep results found._"
     lrs = sorted({r["lr"] for r in sweep} | {lr for p in choice.values()
@@ -479,7 +566,22 @@ def lr_section(cfg: dict, sweep: list[dict], root: Path) -> str:
     table = md_table(["model", *[f"LR {lr:g}" for lr in lrs], "chosen", "at grid edge"], rows)
     write_md("lr_sweep.md", "LR sweep", "Best validation accuracy (%) per LR; the chosen LR in "
              "bold. Validation only -- the test set is never touched by the sweep.", table)
-    return table
+    close = []
+    for m in MODEL_ORDER:
+        vals = {r["lr"]: r["best_val_acc"] for r in sweep if r["model"] == m}
+        pick = choice.get(m, {}).get("lr")
+        rest = [v for lr, v in vals.items() if lr != pick]
+        if pick in vals and rest and 100 * (vals[pick] - max(rest)) < NOISE_PP:
+            close.append(f"{label(cfg, m)} ({100 * (vals[pick] - max(rest)):.2f} pp)")
+    edge = sum(1 for p in choice.values() if p.get("at_grid_edge"))
+    notes = []
+    if edge:
+        notes.append(f"{edge} of {len(choice)} picks sit at the edge of the swept range, so a "
+                     "better rate may lie outside it.")
+    if close:
+        notes.append(f"These picks beat the next rate by less than {NOISE_PP:g} pp, so they are "
+                     "effectively ties: " + ", ".join(close) + ".")
+    return table + ("\n\n" + " ".join(notes) if notes else "")
 
 
 # ---------------------------------------------------------------------------
@@ -586,12 +688,11 @@ def e2_takeaway(cfg: dict, fracs: list[float], tab: dict) -> str:
         else:
             s.append("The CNNs do **not** win clearly at small data, so this run does not "
                      "support the hypothesis.")
-    keep = e2_keep(fracs, tab)
-    if keep:
-        most, least = max(keep, key=keep.get), min(keep, key=keep.get)
-        s.append(f"Going from {100 * hi:g}% to {100 * lo:g}% of the data, {label(cfg, most)} "
-                 f"keeps the most of its accuracy ({100 * keep[most]:.0f}%) and "
-                 f"{label(cfg, least)} the least ({100 * keep[least]:.0f}%).")
+    keep = {m: 100 * k for m, k in e2_keep(fracs, tab).items()}
+    if len(keep) > 1:
+        s.append(f"Going from {100 * hi:g}% to {100 * lo:g}% of the data, the most accuracy is "
+                 f"kept by {ranked_group(cfg, keep, True)[1]} and the least by "
+                 f"{ranked_group(cfg, keep, False)[1]}.")
     return " ".join(s)
 
 
@@ -646,23 +747,35 @@ def e3_table(rows: list[dict]) -> str:
     return table
 
 
-def e3_takeaway(rows: list[dict]) -> str:
+def e3_takeaway(cfg: dict, rows: list[dict]) -> str:
     g = {r["model"]: r["gain_pp"] for r in rows if r["gain_pp"] is not None}
+    if not g:
+        return "No E3 model has an E1 baseline to compare with, so no gain can be computed."
+    ms = [m for m in MODEL_ORDER if m in g]
+    s = ["Strong augmentation changes test accuracy by " + join(
+        [f"{g[m]:+.1f} pp for {label(cfg, m)}" + (" (within noise)" if abs(g[m]) < NOISE_PP else "")
+         for m in ms]) + "."]
+    missing = [m for m in MODEL_ORDER if m not in g]
+    if missing:
+        s.append(f"E3 ran for only {len(ms)} of {len(MODEL_ORDER)} models in this run (not "
+                 f"{join([label(cfg, m) for m in missing])}), so it compares these models, not "
+                 "the CNN and patch families as a whole.")
     cnn = [g[m] for m in CNN_FAMILY if m in g]
     patch = [g[m] for m in PATCH_FAMILY if m in g]
-    s = []
-    if g:
-        top = max(g, key=g.get)
-        s.append(f"The largest gain is {next(r['label'] for r in rows if r['model'] == top)} "
-                 f"({g[top]:+.1f} pp).")
     if cnn and patch:
         mc, mp = float(np.mean(cnn)), float(np.mean(patch))
-        s.append(f"Mean gain: {mp:+.1f} pp for the patch models vs. {mc:+.1f} pp for the CNNs.")
+        one = len(cnn) == 1 and len(patch) == 1
+        if not one:
+            s.append(f"Mean gain: {mp:+.1f} pp for the patch models vs. {mc:+.1f} pp for the CNNs.")
+        cnn_w, patch_w, verb, lacks = (("CNN", "patch model", "gains", "it lacks") if one
+                                       else ("CNNs", "patch models", "gain", "they lack"))
+        pair = " for this one pair" if one else ""
         if mp - mc > NOISE_PP:
-            s.append("The patch models gain more, which **supports** the idea that augmentation "
-                     "partly stands in for the inductive bias they lack.")
+            s.append(f"The {patch_w} {verb} more than the {cnn_w}, which **supports** the idea "
+                     f"that augmentation partly stands in for the inductive bias {lacks}{pair}.")
         elif mc - mp > NOISE_PP:
-            s.append("The CNNs gain more, which **contradicts** the hypothesis.")
+            s.append(f"The {cnn_w} {verb} more than the {patch_w}, which **contradicts** the "
+                     f"hypothesis{pair}.")
         else:
             s.append("The difference is within noise, so this run neither supports nor refutes "
                      "the hypothesis.")
@@ -689,7 +802,8 @@ def e4_rows(cfg: dict, e4: list[dict], e1rows: list[dict]) -> list[dict]:
                      "epochs": rs[0].get("epochs"), "lr": rs[0].get("lr"),
                      "train_time_h": mean_std(r.get("train_time_sec") for r in rs)[0] / 3600,
                      "scratch_model": twin, "scratch_acc": base["test_acc"] if base else None,
-                     "gain_pp": 100 * (acc[0] - base["test_acc"]) if base else None})
+                     "gain_pp": 100 * (acc[0] - base["test_acc"]) if base else None,
+                     "pretrain": pretrain_data(rs[0].get("timm_name"))})
     return rows
 
 
@@ -742,7 +856,9 @@ def e4_takeaway(cfg: dict, rows: list[dict]) -> str:
                  f"{v['epochs']:g} epochs, {v['gain_pp']:+.1f} pp over the from-scratch ViT.")
     if v and rn:
         d = 100 * (v["test_acc"] - rn["test_acc"])
-        s.append(f"Against the pretrained ResNet-50 it is {d:+.1f} pp.")
+        close = tie_note(abs(d))
+        s.append(f"Against the pretrained ResNet-50 it is {d:+.1f} pp"
+                 + (f", {close}." if close else "."))
         if v["gain_pp"] is not None and rn["gain_pp"] is not None:
             if v["gain_pp"] > rn["gain_pp"] + NOISE_PP:
                 s.append("Pretraining helps the ViT more than the CNN: consistent with "
@@ -750,6 +866,10 @@ def e4_takeaway(cfg: dict, rows: list[dict]) -> str:
             else:
                 s.append("Pretraining does not help the ViT clearly more than the CNN here, "
                          "so this run does not show the expected twist.")
+        if v.get("pretrain") and rn.get("pretrain") and v["pretrain"] != rn["pretrain"]:
+            s.append(f"The two were pretrained on different data (the ViT on {v['pretrain']}, "
+                     f"the ResNet-50 on {rn['pretrain']}), so the pretrained pair is not a fair "
+                     "match.")
     s.append("The comparison is not like-for-like in size (ViT-S and ResNet-50 are bigger than "
              "the from-scratch models and see 224×224 inputs), so it measures what pretraining "
              "plus scale buys, not pretraining alone.")
@@ -773,26 +893,51 @@ def e5_section(cfg: dict, s: dict) -> tuple[str, str]:
         [[label(cfg, r["model"]), pct(r["clean_acc"]), pct(r["mean_corruption_acc"]),
           f"{r['relative_robustness']:.2f}", r["worst_corruption"].replace("_", " ")]
          for r in rows])
-    rob = max(rows, key=lambda r: r["relative_robustness"])
-    frag = min(rows, key=lambda r: r["relative_robustness"])
-    top = max(rows, key=lambda r: r["mean_corruption_acc"])
-    worst = defaultdict(int)
+    rel = {r["model"]: 100 * r["relative_robustness"] for r in rows}
+    cor = {r["model"]: 100 * r["mean_corruption_acc"] for r in rows}
+    take = [f"Relative robustness (corrupted ÷ clean accuracy) is highest for "
+            f"{ranked_group(cfg, rel, True, nd=2, unit='', div=100)[1]} and lowest for "
+            f"{ranked_group(cfg, rel, False, nd=2, unit='', div=100)[1]}."]
+    rob = max(rel, key=rel.get)
+    if rob == min(cor, key=cor.get):
+        take.append(f"But {label(cfg, rob)} also has the lowest accuracy on corrupted images "
+                    f"({cor[rob]:.1f}%), so its high share is not a win.")
+    take.append("In absolute terms, the highest accuracy on corrupted images belongs to "
+                f"{ranked_group(cfg, cor, True, nd=1)[1]}.")
+    worst: dict[str, list[str]] = defaultdict(list)
     for r in rows:
-        worst[r["worst_corruption"]] += 1
-    common = max(worst, key=worst.get)
+        worst[r["worst_corruption"]].append(r["model"])
+    parts = []
+    for corr, ms in sorted(worst.items(), key=lambda kv: -len(kv[1])):
+        ms = sorted(ms, key=MODEL_ORDER.index)
+        every = " (all the CNNs)" if set(ms) == set(CNN_FAMILY) else ""
+        parts.append(f"{corr.replace('_', ' ')} for {join([label(cfg, m) for m in ms])}{every}")
+    take.append("The most damaging corruption is " + "; ".join(parts) + ".")
     seeds = sorted({r.get("seeds", 1) for r in rows})
-    take = (f"Relative robustness (corrupted ÷ clean accuracy) is highest for "
-            f"{label(cfg, rob['model'])} ({rob['relative_robustness']:.2f}) and lowest for "
-            f"{label(cfg, frag['model'])} ({frag['relative_robustness']:.2f}). In absolute terms, "
-            f"{label(cfg, top['model'])} is the most accurate on corrupted images "
-            f"({pct(top['mean_corruption_acc'])}%). The most damaging corruption is "
-            f"{common.replace('_', ' ')} for {worst[common]} of {len(rows)} models. "
-            f"Evaluated on {s.get('n_images', '?'):,} test images, "
-            f"{'seed 0 only' if seeds == [1] else f'up to {seeds[-1]} seeds'}.")
-    return table, take
+    n = s.get("n_images")
+    take.append(f"Evaluated on {f'{n:,}' if isinstance(n, int) else '?'} test images, "
+                f"{'seed 0 only' if seeds == [1] else f'up to {seeds[-1]} seeds'}.")
+    return table, " ".join(take)
 
 
-def e6_section(cfg: dict, s: dict) -> tuple[str, str]:
+def rescore_note(cfg: dict, s: dict, e1: list[dict]) -> str:
+    """E5 and E6 re-score the E1 seed-0 checkpoints, which can move a clean score by
+    a few images; say by how much, so no model gets quoted with two numbers."""
+    s0 = {r["model"]: r["test_acc"] for r in e1 if r.get("seed") == 0}
+    diffs = [(r["model"], r["clean_acc"], s0[r["model"]]) for r in s.get("table", [])
+             if r["model"] in s0 and abs(r["clean_acc"] - s0[r["model"]]) > 1e-9]
+    if not diffs:
+        return ""
+    n = s.get("n_images")
+    most = (f"; at most {max(round(abs(a - b) * n) for _, a, b in diffs)} of {n:,} images"
+            if isinstance(n, int) else "")
+    shown = join([f"{label(cfg, m)} {100 * a:.2f}% vs. {100 * b:.2f}%" for m, a, b in diffs])
+    return (f"_Clean accuracy in E5 and E6 comes from re-scoring the E1 seed-0 checkpoints, so "
+            f"it can differ from E1's test accuracy ({shown}{most}). Quote E1's numbers._")
+
+
+def e6_section(cfg: dict, s: dict,
+               patches: dict[str, tuple[int, int]] | None = None) -> tuple[str, str]:
     rows = s["table"]
     cols = [k for k in rows[0] if k.startswith(("patch_", "pixel_"))]
     heads = [f"{c.split('_')[0]} {c.split('_')[1].replace('x', '×')}" for c in cols]
@@ -801,21 +946,65 @@ def e6_section(cfg: dict, s: dict) -> tuple[str, str]:
                       for r in rows])
     finest = max((c for c in cols if c.startswith("patch_")),
                  key=lambda c: int(c.split("_")[1].split("x")[0]))
-    keep = {r["model"]: r[finest] / r["clean_acc"] for r in rows if r["clean_acc"] > 0}
-    calm, hurt = max(keep, key=keep.get), min(keep, key=keep.get)
-    pix = [c for c in cols if c.startswith("pixel_")]
+    keep = {r["model"]: 100 * r[finest] / r["clean_acc"] for r in rows if r["clean_acc"] > 0}
     grid = finest.split("_")[1].replace("x", "×")
-    s_ = (f"With the image cut into {'an' if grid.startswith('8') else 'a'} {grid} grid of "
-          f"patches and the patches shuffled, {label(cfg, calm)} keeps {100 * keep[calm]:.0f}% of its clean "
-          f"accuracy and {label(cfg, hurt)} only {100 * keep[hurt]:.0f}%. A model that barely "
-          "notices its patches being rearranged is reading local texture, not global shape.")
+    take = [f"With the image cut into {'an' if grid.startswith('8') else 'a'} {grid} grid of "
+            f"patches and the patches shuffled, the most clean accuracy is kept by "
+            f"{ranked_group(cfg, keep, True)[1]} and the least by "
+            f"{ranked_group(cfg, keep, False)[1]}."]
+    # A grid that lines up with a patch model's own patches only moves its tokens and
+    # never cuts them, so for that model the test cannot tell shape from texture.
+    grids = sorted({int(c.split("_")[1].split("x")[0]) for c in cols if c.startswith("patch_")})
+    aligned = sorted((m for m, (p, img) in (patches or {}).items() if m in keep
+                      and all(img % g == 0 and (img // g) % p == 0 for g in grids)),
+                     key=MODEL_ORDER.index)
+    if aligned:
+        px = sorted({patches[m][0] for m in aligned})
+        take.append(f"Every grid here lines up with the {join([str(p) for p in px])}-pixel "
+                    f"patches of {join([label(cfg, m) for m in aligned])}, so the shuffle moves "
+                    "their patches without cutting any: their scores measure how much they rely "
+                    "on patch positions, not whether they read shape or texture.")
+    else:
+        take.append("A model that keeps more of its accuracy when its patches are rearranged "
+                    "relies less on the image's global layout.")
+    pix = [c for c in cols if c.startswith("pixel_")]
     if pix:
-        pk = {r["model"]: np.mean([r[c] for c in pix]) / r["clean_acc"]
+        pk = {r["model"]: 100 * float(np.mean([r[c] for c in pix])) / r["clean_acc"]
               for r in rows if r["clean_acc"] > 0}
-        lo = min(pk, key=pk.get)
-        s_ += (f" Shuffling pixels *inside* patches (texture destroyed, layout kept) hurts "
-               f"{label(cfg, lo)} the most (keeps {100 * pk[lo]:.0f}% on average).")
-    return table, s_
+        lo = close_to_extreme(pk, highest=False)
+        lo = sorted(lo, key=MODEL_ORDER.index) if len(lo) > 1 else lo
+        vals = [f"{pk[m]:.0f}%" for m in lo]
+        spread = max(pk[m] for m in lo) - min(pk[m] for m in lo)
+        if len(lo) == 1:
+            kept = f"it keeps {vals[0]} of its clean accuracy"
+        elif len(set(vals)) == 1:
+            kept = f"each keeps about {vals[0]} of its clean accuracy ({tie_note(spread)})"
+        else:
+            kept = f"they keep {join(vals)} of their clean accuracy ({tie_note(spread)})"
+        take.append(f"Shuffling pixels *inside* patches (texture destroyed, layout kept) hurts "
+                    f"{join([label(cfg, m) for m in lo])} the most: {kept}, averaged over the "
+                    f"{len(pix)} grid sizes.")
+    return table, " ".join(take)
+
+
+def pair_phrase(cfg: dict, pairs: dict[tuple[str, str], float], highest: bool) -> str:
+    """The model pair(s) at one extreme of ``pairs`` (points). Tied pairs that share a
+    model read as that model with the others, e.g. ``"MLP with Simple CNN and ViT
+    (67%, effectively tied)"``."""
+    group = close_to_extreme(pairs, highest)
+    if len(group) == 1:
+        a, b = group[0]
+        return f"{label(cfg, a)} and {label(cfg, b)} ({pairs[(a, b)]:.0f}%)"
+    vals = [pairs[p] for p in group]
+    lo, hi = f"{min(vals):.0f}", f"{max(vals):.0f}"
+    span = f"{lo}%" if lo == hi else f"{lo}–{hi}%"
+    note = tie_note(max(vals) - min(vals))
+    shared = set(group[0]).intersection(*group[1:])
+    if shared:
+        hub = sorted(shared, key=MODEL_ORDER.index)[0]
+        others = sorted({m for p in group for m in p if m != hub}, key=MODEL_ORDER.index)
+        return f"{label(cfg, hub)} with {join([label(cfg, m) for m in others])} ({span}, {note})"
+    return join([f"{label(cfg, a)} and {label(cfg, b)}" for a, b in group]) + f" ({span}, {note})"
 
 
 def e7_section(cfg: dict, root: Path) -> tuple[str, str]:
@@ -826,19 +1015,19 @@ def e7_section(cfg: dict, root: Path) -> tuple[str, str]:
         parts.append(md_table(["model", "feature dim", "silhouette (cosine)"],
                               [[label(cfg, r["model"]), r["feature_dim"],
                                 f"{r['silhouette_cosine']:.3f}"] for r in rows]))
-        b = max(rows, key=lambda r: r["silhouette_cosine"])
-        take.append(f"{label(cfg, b['model'])} has the most class-separated penultimate features "
-                    f"(silhouette {b['silhouette_cosine']:.3f}).")
+        sil = {r["model"]: 100 * r["silhouette_cosine"] for r in rows}
+        take.append("By silhouette score, the most class-separated penultimate features belong to "
+                    f"{ranked_group(cfg, sil, True, nd=3, unit='', div=100)[1]}.")
     agr = root / "tables" / "model_agreement.csv"
     if agr.exists():
         rows = read_csv(agr)
         ms = [r["model"] for r in rows]
-        pairs = [(rows[i][ms[j]], ms[i], ms[j]) for i in range(len(ms)) for j in range(i + 1, len(ms))]
+        pairs = {(ms[i], ms[j]): 100 * rows[i][ms[j]]
+                 for i in range(len(ms)) for j in range(i + 1, len(ms))}
         if pairs:
-            hi, lo = max(pairs), min(pairs)
-            take.append(f"The two models that most often agree are {label(cfg, hi[1])} and "
-                        f"{label(cfg, hi[2])} ({100 * hi[0]:.0f}% of test images); the least, "
-                        f"{label(cfg, lo[1])} and {label(cfg, lo[2])} ({100 * lo[0]:.0f}%).")
+            take.append("Agreement (the share of test images two models label the same) is "
+                        f"highest for {pair_phrase(cfg, pairs, True)} and lowest for "
+                        f"{pair_phrase(cfg, pairs, False)}.")
     return "\n\n".join(parts), " ".join(take)
 
 
@@ -849,7 +1038,7 @@ def e7_section(cfg: dict, root: Path) -> tuple[str, str]:
 
 def run_context(root: Path) -> dict:
     ctx: dict[str, Any] = {"mode": None, "upgrades_done": None, "upgrades_planned": None,
-                           "trims": None, "wall_clock": None}
+                           "trims": None, "wall_clock": None, "gpu_time": None}
     rs = root / "RUN_SUMMARY.md"
     if rs.exists():
         text = rs.read_text(encoding="utf-8")
@@ -857,7 +1046,9 @@ def run_context(root: Path) -> dict:
                          ("upgrades_planned", r"\*\*Upgrades planned:\*\* (.+?)\s*$"),
                          ("upgrades_done", r"\*\*Upgrades fully completed:\*\* (.+?)\s*$"),
                          ("trims", r"\*\*Trims applied:\*\* (.+?)\s*$"),
-                         ("wall_clock", r"\*\*Wall-clock this session:\*\* (.+?)\s*$")):
+                         ("wall_clock", r"\*\*Wall-clock this session:\*\* (.+?)\s*$"),
+                         ("gpu_time", r"\*\*GPU time this session \(sum over workers\):\*\* "
+                                      r"(.+?)\s*$")):
             mt = re.search(pat, text, re.M)
             if mt:
                 ctx[key] = mt.group(1).strip()
@@ -866,31 +1057,57 @@ def run_context(root: Path) -> dict:
     return ctx
 
 
-def compute_used(runs: dict[str, list[dict]]) -> tuple[list[dict], float, list[str]]:
-    """GPU-hours per experiment (each run's wall clock, summed), total, GPU names."""
-    rows, total, gpus = [], 0.0, set()
+def hours_of(text: str) -> float | None:
+    """``"11h 14m 28s"`` -> 11.24, or None when the text holds no h/m/s parts."""
+    parts = {u: float(v) for v, u in re.findall(r"(\d+(?:\.\d+)?)\s*([hms])\b", text)}
+    if not parts:
+        return None
+    return parts.get("h", 0.0) + parts.get("m", 0.0) / 60 + parts.get("s", 0.0) / 3600
+
+
+def compute_used(runs: dict[str, list[dict]], root: Path) -> dict[str, Any]:
+    """GPU-hours from each job's own wall clock: every training run (``metrics.json``)
+    and the E5-E7 evaluation jobs (``summary.json``). Neither counts the start-up
+    between jobs, so the queue's own GPU-time total is a little higher."""
+    train, evals, gpus = [], [], set()
     for exp in ("lr_sweep", "E1", "E2", "E3", "E4_sweep", "E4"):
         rs = runs.get(exp, [])
         if not rs:
             continue
-        h = sum(r.get("wall_time_sec") or 0 for r in rs) / 3600
-        total += h
         gpus |= {(r.get("device") or {}).get("gpu") for r in rs} - {None}
-        rows.append({"experiment": exp, "runs": len(rs), "gpu_hours": h})
-    return rows, total, sorted(gpus)
+        train.append({"experiment": exp, "kind": "train", "runs": len(rs),
+                      "gpu_hours": sum(r.get("wall_time_sec") or 0 for r in rs) / 3600})
+    for exp in ("E5", "E6", "E7"):
+        sm = eval_summary(root, exp)
+        if sm and sm.get("seconds"):
+            evals.append({"experiment": exp, "kind": "eval", "runs": 1,
+                          "gpu_hours": float(sm["seconds"]) / 3600})
+    return {"train": train, "eval": evals, "gpus": sorted(gpus),
+            "train_h": sum(r["gpu_hours"] for r in train),
+            "eval_h": sum(r["gpu_hours"] for r in evals)}
 
 
-def compute_table(runs: dict[str, list[dict]], wall_clock: str | None) -> str:
-    rows, total, gpus = compute_used(runs)
-    write_csv(rows or [{"experiment": None, "runs": 0, "gpu_hours": 0}],
+def compute_table(runs: dict[str, list[dict]], root: Path, ctx: dict) -> str:
+    c = compute_used(runs, root)
+    rows = c["train"] + c["eval"]
+    write_csv(rows or [{"experiment": None, "kind": None, "runs": 0, "gpu_hours": 0}],
               table_path("compute_used.csv"))
-    table = md_table(["experiment", "runs", "GPU-hours (wall clock per run, summed)"],
-                     [[r["experiment"], r["runs"], f"{r['gpu_hours']:.2f}"] for r in rows]
-                     + [["**total**", sum(r["runs"] for r in rows), f"**{total:.2f}**"]])
-    note = f"Hardware: {', '.join(gpus) or 'unknown'}."
-    if wall_clock:
+    body = [[r["experiment"], r["runs"], f"{r['gpu_hours']:.2f}"] for r in c["train"]]
+    body.append(["**training total**", sum(r["runs"] for r in c["train"]),
+                 f"**{c['train_h']:.2f}**"])
+    if c["eval"]:
+        body += [[f"{r['experiment']} (evaluation)", r["runs"], f"{r['gpu_hours']:.2f}"]
+                 for r in c["eval"]]
+        body.append(["**total**", sum(r["runs"] for r in rows),
+                     f"**{c['train_h'] + c['eval_h']:.2f}**"])
+    table = md_table(["experiment", "runs", "GPU-hours (each job's own wall clock, summed)"], body)
+    note = f"Hardware: {', '.join(c['gpus']) or 'unknown'}."
+    if ctx.get("gpu_time"):
+        note += (f" The queue's own GPU time, which also counts each job's start-up, was "
+                 f"{ctx['gpu_time']}.")
+    if ctx.get("wall_clock"):
         note += (f" Wall clock of the last queue session (runs in parallel across GPUs): "
-                 f"{wall_clock}.")
+                 f"{ctx['wall_clock']}.")
     write_md("compute_used.md", "Compute used", note, table)
     return table + f"\n\n{note}"
 
@@ -920,6 +1137,7 @@ def headline_numbers(cfg: dict, root: Path, runs: dict[str, list[dict]],
         for r in rows:
             k = f"e1.{r['model']}"
             n[f"{k}.acc"] = pct(r["test_acc"])
+            n[f"{k}.acc2"] = pct(r["test_acc"], 2)
             n[f"{k}.acc_pm"] = pm(r["test_acc"], r["test_acc_std"], r["seeds"])
             n[f"{k}.params_m"] = "–" if not r["params"] else f"{r['params'] / 1e6:.1f}"
             n[f"{k}.gflops"] = "–" if r["flops"] is None else f"{r['flops'] / 1e9:.2f}"
@@ -936,6 +1154,9 @@ def headline_numbers(cfg: dict, root: Path, runs: dict[str, list[dict]],
                       "e2.gap_lo": f"{g['gap_lo']:.1f}", "e2.gap_hi": f"{g['gap_hi']:.1f}"})
         for m, k in e2_keep(fracs, tab).items():
             n[f"e2.{m}.keep"] = f"{100 * k:.0f}"
+        steps = sorted({r["total_steps"] for r in runs["E2"] if r.get("total_steps")})
+        if len(steps) == 1:
+            n["e2.steps"] = f"{steps[0]:,}"
     if runs.get("E3"):
         r3 = e3_rows(cfg, runs["E3"], rows)
         for r in r3:
@@ -954,15 +1175,35 @@ def headline_numbers(cfg: dict, root: Path, runs: dict[str, list[dict]],
     for r in (s5 or {}).get("table", []):
         n[f"e5.{r['model']}.rel"] = f"{r['relative_robustness']:.2f}"
         n[f"e5.{r['model']}.corrupted"] = pct(r["mean_corruption_acc"])
+        n[f"e5.{r['model']}.clean"] = pct(r["clean_acc"])
+        n[f"e5.{r['model']}.clean2"] = pct(r["clean_acc"], 2)
     s6 = eval_summary(root, "E6")
+    pixel_keep = {}
     for r in (s6 or {}).get("table", []):
+        n[f"e6.{r['model']}.clean"] = pct(r["clean_acc"])
         for c, v in r.items():
             if c.startswith(("patch_", "pixel_")):
                 n[f"e6.{r['model']}.{c}"] = pct(v)
                 if r["clean_acc"] > 0:
                     n[f"e6.{r['model']}.{c}.keep"] = f"{100 * v / r['clean_acc']:.0f}"
-    _, total, gpus = compute_used(runs)
-    n.update({"compute.gpu_hours": f"{total:.1f}", "compute.gpu": ", ".join(gpus) or "unknown"})
+        pix = [v for c, v in r.items() if c.startswith("pixel_")]
+        if pix and r["clean_acc"] > 0:
+            # Share of clean accuracy kept under pixel shuffle, averaged over grid sizes.
+            pixel_keep[r["model"]] = 100 * float(np.mean(pix)) / r["clean_acc"]
+            n[f"e6.{r['model']}.pixel.keep"] = f"{pixel_keep[r['model']]:.0f}"
+    cnn_keep = [pixel_keep[m] for m in CNN_FAMILY if m in pixel_keep]
+    if cnn_keep:
+        n["e6.cnn.pixel.keep"] = f"{float(np.mean(cnn_keep)):.0f}"
+    c = compute_used(runs, root)
+    n.update({"compute.gpu_hours": f"{c['train_h']:.1f}",    # training runs only
+              "compute.eval_hours": f"{c['eval_h']:.1f}",
+              "compute.total_hours": f"{c['train_h'] + c['eval_h']:.1f}",
+              "compute.gpu": ", ".join(c["gpus"]) or "unknown"})
+    ctx = run_context(root)
+    if ctx["gpu_time"] and hours_of(ctx["gpu_time"]) is not None:
+        n["compute.queue_gpu_hours"] = f"{hours_of(ctx['gpu_time']):.1f}"
+    if ctx["wall_clock"]:
+        n["compute.wall_clock"] = ctx["wall_clock"]
     return n
 
 
@@ -975,9 +1216,13 @@ def table_body(path: Path) -> str:
 def fill_markers(path: Path, nums: dict[str, str]) -> list[str]:
     """Refresh ``<!-- n:KEY -->`` and ``<!-- block:NAME -->`` spans in ``path``.
 
-    Returns the keys/blocks it could not resolve (left untouched).
+    Returns the keys/blocks it could not resolve (left untouched). Line endings
+    stay as the file has them (a CRLF checkout stays CRLF), so a refresh changes
+    only the spans themselves.
     """
-    text = path.read_text(encoding="utf-8")
+    with path.open(encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    nl = "\r\n" if "\r\n" in text else "\n"
     unknown: list[str] = []
 
     def num(m: re.Match) -> str:
@@ -991,11 +1236,13 @@ def fill_markers(path: Path, nums: dict[str, str]) -> list[str]:
         if not src.exists():
             unknown.append(f"block:{m.group(2)}")
             return m.group(0)
-        return f"{m.group(1)}\n{table_body(src)}\n{m.group(4)}"
+        body = table_body(src).replace("\n", nl)
+        return f"{m.group(1)}{nl}{body}{nl}{m.group(4)}"
 
     new = BLOCK_RE.sub(block, NUM_RE.sub(num, text))
     if new != text:
-        path.write_text(new, encoding="utf-8", newline="\n")
+        with path.open("w", encoding="utf-8", newline="") as fh:
+            fh.write(new)
     return unknown
 
 
@@ -1029,11 +1276,14 @@ def figure_block(root: Path, names: list[str]) -> str:
 def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict) -> str:
     ctx = run_context(root)
     e1, e2, e3, e4 = (runs.get(k, []) for k in ("E1", "E2", "E3", "E4"))
+    # A redirected root is often an absolute path on someone's machine; don't print it.
+    where = (f"`{results_dir()}/runs/`" if not Path(results_dir()).is_absolute()
+             else "the `runs/` folder next to this file")
     out: list[str] = [
         "# CIFAR-10 Architecture Showdown -- Report",
         "",
         f"_Generated by `scripts/make_report.py` on {time.strftime('%Y-%m-%d %H:%M')} from "
-        f"`{results_dir()}/runs/`. Every number below is computed from saved run outputs; "
+        f"{where}. Every number below is computed from saved run outputs; "
         "nothing is typed by hand. Re-run the script to refresh it._",
         "",
     ]
@@ -1043,6 +1293,8 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
         e1_epochs = sorted({round(r["epochs"]) for r in e1 if r.get("epochs")})
         e1_seeds = sorted({r["seed"] for r in e1})
         e2_steps = sorted({r["total_steps"] for r in e2 if r.get("total_steps")})
+        picks = lr_picks(root)
+        edge = sum(1 for p in picks.values() if p.get("at_grid_edge"))
         out += [
             "> **Read this first: this is a 9-hour run, not the full protocol.**",
             ">",
@@ -1054,7 +1306,9 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
             "**favours the CNNs**.",
             f"> - E2 points are step-matched but short ({', '.join(f'{s:,}' for s in e2_steps) or '?'}"
             " steps), so absolute E2 accuracies sit below E1's.",
-            "> - Learning rates were auto-picked from a short validation sweep, not confirmed by hand.",
+            "> - Learning rates were auto-picked from a short validation sweep, not confirmed by "
+            "hand" + (f"; {edge} of {len(picks)} picks sit at the edge of the swept range."
+                      if edge else "."),
             f"> - Upgrades planned: {ctx['upgrades_planned'] or 'unknown'}; fully completed: "
             f"{ctx['upgrades_done'] or 'unknown'}. Trims: {ctx['trims'] or 'unknown'}.",
             "",
@@ -1099,7 +1353,9 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
         out += [missing("E2"), ""]
 
     # --- E3 ----------------------------------------------------------------
-    out += ["## E3 -- Strong augmentation", "",
+    n3 = len(models_in(e3))
+    part = f" (partial: {n3} of {len(MODEL_ORDER)} models)" if 0 < n3 < len(MODEL_ORDER) else ""
+    out += [f"## E3 -- Strong augmentation{part}", "",
             "**Question:** does heavy augmentation help the Transformer and Mixer more than the "
             "CNNs?", ""]
     if e3:
@@ -1108,7 +1364,7 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
         out += ["**Setup:** standard + RandAugment(2, 9) + Mixup(0.8)/CutMix(1.0) at p=0.5 + "
                 "RandomErasing(0.25), same epochs and LR as E1, 1 seed.", "",
                 e3_table(r3), "", figure_block(root, ["aug_gain.png"]), "",
-                f"**Takeaway:** {e3_takeaway(r3)}", ""]
+                f"**Takeaway:** {e3_takeaway(cfg, r3)}", ""]
     else:
         out += [missing("E3 (an upgrade in 9h mode)"), ""]
 
@@ -1132,7 +1388,9 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
     s5 = eval_summary(root, "E5")
     if s5 and s5.get("table"):
         t, take = e5_section(cfg, s5)
-        out += [t, "", figure_block(root, EVAL_FIGURES["E5"]), "", f"**Takeaway:** {take}", ""]
+        note = rescore_note(cfg, s5, e1)
+        out += [t, "", *([note, ""] if note else []), figure_block(root, EVAL_FIGURES["E5"]), "",
+                f"**Takeaway:** {take}", ""]
     else:
         out += [missing("E5"), ""]
 
@@ -1141,7 +1399,7 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
             "**Question:** which models rely on global shape, and which on local texture?", ""]
     s6 = eval_summary(root, "E6")
     if s6 and s6.get("table"):
-        t, take = e6_section(cfg, s6)
+        t, take = e6_section(cfg, s6, patch_grid(e1))
         out += [t, "", figure_block(root, EVAL_FIGURES["E6"]), "", f"**Takeaway:** {take}", ""]
     else:
         out += [missing("E6"), ""]
@@ -1161,7 +1419,7 @@ def build_report(cfg: dict, root: Path, runs: dict[str, list[dict]], flops: dict
         out += [missing("E7"), ""]
 
     # --- compute -----------------------------------------------------------
-    out += ["## Compute used", "", compute_table(runs, ctx["wall_clock"]), ""]
+    out += ["## Compute used", "", compute_table(runs, root, ctx), ""]
 
     # --- FLOPs provenance --------------------------------------------------
     out += ["---", "",
