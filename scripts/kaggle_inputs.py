@@ -14,13 +14,14 @@
     copy, CIFAR-10 is downloaded as before. Either way the source is printed.
 
 ``restore``
-    A committed run that stopped early (the session limit, a crash) leaves
-    its output on its version page. Attached as an input, that output holds
-    the earlier ``results/`` -- as the folder itself, and packaged as
-    ``results.zip`` / ``results_light.zip``. The source with the most
-    finished runs is copied into ``results/`` (``results.zip`` on a tie: the
-    packaging cell writes it whole, while the folder is whatever Kaggle kept),
-    leaving scratch and failure logs behind. The queue then skips every
+    A committed run that left work unfinished (failed runs, upgrades dropped
+    for time, a crashed queue) keeps its output on its version page.
+    Attached as an input, that output holds the earlier ``results/``
+    packaged as ``results.zip`` and ``results_light.zip``; versions from
+    before the run moved to /kaggle/tmp hold the folder itself as well. The
+    source with the most finished runs is copied into ``results/``
+    (``results.zip`` on a tie: the packaging cell writes it whole, while a
+    folder is whatever Kaggle kept), leaving scratch and failure logs behind. The queue then skips every
     finished run through its own ``job_done()``, exactly as on a relaunch in
     place. If ``results/runs`` already holds finished runs, nothing is copied.
     Either way it reports the 9h queue against what is on disk: how much will

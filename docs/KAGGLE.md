@@ -100,7 +100,7 @@ it used:
 
 ```
 CIFAR-10: using the attached copy at /kaggle/input/cifar10-python/cifar-10-batches-py
-          -> /kaggle/working/cifar10-architecture-showdown/data/cifar-10-batches-py (every file md5-verified against torchvision)
+          -> /kaggle/tmp/cifar10-architecture-showdown/data/cifar-10-batches-py (every file md5-verified against torchvision)
 ```
 
 Internet still has to be on, for `pip install` and the E4 weights.
@@ -154,10 +154,19 @@ stops the run with the error in the pre-flight cell's log.
 
 Once it passes, set `SMOKE = False` and commit again for the real run.
 
-Every run, smoke or real, ends with a census of `/kaggle/working`, the version's saved output.
-Kaggle may cap that output at about 500 files (community reports; not documented). The last cell
-prints the exact file count and each top-level folder's count, then the same breakdown for the
-repo clone, and warns past 400 files.
+### What a run saves
+
+Kaggle saves `/kaggle/working` as the version's output, and may cap it at about 500 files
+(community reports; not documented). A full run makes far more than that, so the notebook works
+somewhere else. The repo clone, `data/`, `results/` and every checkpoint live in
+`/kaggle/tmp/cifar10-architecture-showdown`, which is not saved. The packaging cell leaves exactly
+two files in `/kaggle/working`: `results.zip` and `results_light.zip` (§5). A smoke run leaves
+only `smoke_test.json`.
+
+Every run, smoke or real, ends with a census. The last cell prints the exact file count in
+`/kaggle/working` and each top-level folder's count. It then prints the same breakdown for the
+work dir, which is what the output would hold if the clone still lived inside it. It warns past
+400 files.
 
 ---
 
@@ -185,10 +194,12 @@ cannot wait for a "go", so the plan is applied as printed: read it in the log af
 
 ## 5. When it finishes
 
-Download from the committed version's **Output** tab:
+Download from the committed version's **Output** tab. These two archives are the whole output
+(see "What a run saves" in §3):
 
 - **`results_light.zip`** — JSON, CSV, Markdown, PNG. This is what Phase 9 needs.
-- **`results.zip`** — the same plus checkpoints, if you want to re-run E5/E6/E7 locally.
+- **`results.zip`** — the same plus checkpoints, if you want to re-run E5/E6/E7 locally. It is
+  also what a resume restores from.
 
 ```powershell
 Expand-Archive -Path results_light.zip -DestinationPath .\results -Force
@@ -235,13 +246,14 @@ which is one more reason `BUDGET_HOURS` stays well under it. To pick up where a 
 2. Commit again (**Save & Run All**) with `SMOKE = False`.
 
 The pre-flight cell runs `scripts/kaggle_inputs.py restore`. It looks for the earlier `results/`
-in the attached output: the folder itself, `results.zip` and `results_light.zip`. It copies the
-one with the most finished runs into `results/`, taking `results.zip` on a tie because the
-packaging cell always writes it whole. Then it prints what the queue will skip:
+in the attached output: `results.zip` and `results_light.zip`. Versions from before the run
+moved to `/kaggle/tmp` also saved the results folder itself, and that works too. It copies the
+source with the most finished runs into `results/` in the work dir, taking `results.zip` on a tie
+because the packaging cell always writes it whole. Then it prints what the queue will skip:
 
 ```
 Resume: found /kaggle/input/<notebook>/results.zip (zip, <n> finished runs, with checkpoints)
-Resume: restored <files> files from /kaggle/input/<notebook>/results.zip into /kaggle/working/cifar10-architecture-showdown/results
+Resume: restored <files> files from /kaggle/input/<notebook>/results.zip into /kaggle/tmp/cifar10-architecture-showdown/results
 Resume: <n> of the 113 jobs in the 9h queue (every upgrade included) are already complete; the queue will skip them.
 ```
 
@@ -251,7 +263,9 @@ with `status: completed`, or `done.json` for E5–E7), runs that stopped part-wa
 Failure logs and scratch are not restored, so failed runs are retried. Restore from the full
 output, not `results_light.zip` alone: it has no checkpoints, so partial runs would restart and
 E5–E7 could not evaluate the E1 runs (the log warns if so). With nothing attached the cell prints
-`starting from scratch`. `python scripts/kaggle_inputs_selftest.py` covers every case on CPU.
+`starting from scratch`. `python scripts/kaggle_inputs_selftest.py` covers every case on CPU, and
+`python scripts/kaggle_outputs_selftest.py` runs the whole round trip: a 600-file results tree is
+packed into the two zips, restored from them, and the queue's own dry run checks what it would skip.
 
 ---
 
@@ -266,7 +280,9 @@ E5–E7 could not evaluate the E1 runs (the log warns if so). With nothing attac
 | `CIFAR-10: skipping the attached copy at … fails its md5 check` | The attached dataset is not the official python version, or is incomplete | Nothing — the notebook downloads instead. Attach a different copy next time to skip the download |
 | `torch lost CUDA after the pip install` | Something pulled a CPU torch wheel | Restart the session. Never add `torch` to the install list — Kaggle ships its own CUDA build |
 | Session ends mid-queue | Hit the per-session time limit | Kaggle may keep no output from a version stopped at its limit, so keep `BUDGET_HOURS` well under it. If that version's Output tab does list files, attach it and commit again (§5, "If the queue stopped before the end"): finished runs are skipped and partial runs resume from `last.pt` |
-| `OSError: No space left on device` | Checkpoints filled `/kaggle/working` | LR-sweep runs save no checkpoints and other runs keep only `best.pt`; if it still fills, drop `last.pt` retention or cut E1 seeds |
+| `OSError: No space left on device` | Checkpoints filled the work dir's disk (`/kaggle/tmp`; the probe cell prints its free space) | LR-sweep runs save no checkpoints and other runs keep only `best.pt`; if it still fills, drop `last.pt` retention or cut E1 seeds. `results_light.zip` is written before `results.zip`, so Phase 9's archive survives a disk that fills during packaging |
+| Census: `WARNING: <n> files in /kaggle/working` | Something other than the two zips is in the output | The packaging cell removes strays, so packaging did not finish: read its log. The census rows say what is there |
+| `PermissionError` creating `/kaggle/tmp` in the probe cell | The image does not allow new folders under `/kaggle` | Set `SCRATCH = Path("/tmp")` in the CONFIG cell. Any writable path outside `/kaggle/working` works; the probe prints its free space |
 | `FileNotFoundError: ...MD not found under /kaggle/input` | Dataset not attached, or zipped with an extra top-level folder | Add Input → Datasets; or set `DATASET_SLUG` explicitly |
 | Notebook "succeeded" but `results/` is empty | A `!`-magic cell failed silently | Already handled — every step runs through `subprocess` with an exit-code check. If you add cells, keep that pattern |
 | Queue dies on one model, rest never run | Unhandled exception | By spec §12.5 each run is wrapped in try/except and failures are logged to `results/failures/` without stopping the queue. If the whole process died, that is a bug in `run_all.py` |

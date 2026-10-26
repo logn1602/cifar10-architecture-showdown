@@ -77,7 +77,7 @@ experiments, trimmed seeds and epochs per spec Section 12.
 | **Input** (optional) | A CIFAR-10 dataset, python version | **Add Input** → search "CIFAR-10 Python". Used instead of the 170 MB download when every file passes its md5 check; the pre-flight log prints which path it used. |
 | **Input** (only to resume) | An earlier version's output | To continue a version that left runs unfinished: **Add Input** → *Notebooks* → this notebook → that version, then commit again. Every run it finished is skipped. Leave it off for a fresh run. |
 | **Environment** | **Always use latest environment** | A notebook pinned to its original environment can get a 2023 image (Python 3.10, PyTorch 2.0). The code still runs there, but the latest environment has a current PyTorch. |
-| **Persistence** | Files only (optional) | Not required; everything lands in `/kaggle/working`. |
+| **Persistence** | Files only (optional) | Not required. The run works in `/kaggle/tmp`, which is not saved; its only output is `results.zip` and `results_light.zip` in `/kaggle/working`. |
 
 ### ▶️ How to start it
 
@@ -121,7 +121,13 @@ MODE = "9h"
 # interrupted and resumed), then every later cell skips itself.
 SMOKE = False
 
-WORK_DIR = Path("/kaggle/working/cifar10-architecture-showdown")
+# Kaggle saves /kaggle/working as this version's output, and may cap it at ~500
+# files. So the run works outside it: the clone, data/, results/ and every
+# checkpoint live in WORK_DIR, which is not saved, and the packaging cell leaves
+# exactly two files in OUTPUT_DIR: results.zip and results_light.zip.
+OUTPUT_DIR = Path("/kaggle/working")
+SCRATCH = Path("/kaggle/tmp")       # any writable path outside OUTPUT_DIR works, e.g. /tmp
+WORK_DIR = SCRATCH / "cifar10-architecture-showdown"
 SPEC_FILE = "CIFAR10_ARCHITECTURE_SHOWDOWN.md"   # the marker that identifies the repo root
 
 # -----------------------------------------------------------------------------
@@ -186,8 +192,11 @@ try:
     print(f"RAM               : {psutil.virtual_memory().total/1024**3:.1f} GB")
 except ImportError:
     pass
-free = shutil.disk_usage("/kaggle/working").free / 1024**3
-print(f"/kaggle/working   : {free:.1f} GB free")
+SCRATCH.mkdir(parents=True, exist_ok=True)
+free = shutil.disk_usage(SCRATCH).free / 1024**3
+print(f"{str(SCRATCH):<18}: {free:.1f} GB free  (work dir: data, results, checkpoints)")
+print(f"{str(OUTPUT_DIR):<18}: {shutil.disk_usage(OUTPUT_DIR).free / 1024**3:.1f} GB free"
+      "  (output: the two zips)")
 
 assert torch.cuda.is_available(), (
     "No GPU! Settings -> Accelerator -> GPU T4 x2, then restart the session."
@@ -199,7 +208,8 @@ if n_gpu < 2:
     print("!! Set Accelerator -> GPU T4 x2 and restart, or lower the scope.")
     print("!" * 70)
 if free < 15:
-    print(f"\n!! Only {free:.1f} GB free -- checkpoints + CIFAR-10 need ~10 GB. Watch for ENOSPC.")
+    print(f"\n!! Only {free:.1f} GB free in {SCRATCH} -- checkpoints + CIFAR-10 need ~10 GB. "
+          "Watch for ENOSPC.")
 
 # Kaggle can pin a notebook to the environment it was created in. A pinned
 # 2023 image (Python 3.10, PyTorch 2.0) still runs this project -- the code is
@@ -213,10 +223,11 @@ if torch_version < (2, 1):
     print("!" * 70)
 '''),
 
-    # --- cell 3 (code): 2. Fetch the repo into /kaggle/working.
+    # --- cell 3 (code): 2. Fetch the repo into the work dir (not /kaggle/working).
     ('code', r'''
 # =============================================================================
-# 2. Fetch the repo into /kaggle/working.
+# 2. Fetch the repo into the work dir under /kaggle/tmp -- not /kaggle/working,
+#    which is the saved output and gets only the two zips at the end.
 #
 # Copy, never symlink: /kaggle/input is READ-ONLY and the code writes results,
 # checkpoints and the data/ directory.
@@ -252,7 +263,7 @@ elif SOURCE == "dataset":
     shutil.copytree(src, WORK_DIR, dirs_exist_ok=True)
 elif SOURCE == "git":
     WORK_DIR.parent.mkdir(parents=True, exist_ok=True)
-    run(["git", "clone", "--depth", "1", REPO_URL, str(WORK_DIR)], cwd="/kaggle/working")
+    run(["git", "clone", "--depth", "1", REPO_URL, str(WORK_DIR)], cwd=str(WORK_DIR.parent))
 else:
     raise ValueError(f"SOURCE must be 'dataset' or 'git', got {SOURCE!r}")
 
@@ -327,7 +338,7 @@ for dist in ("torch", "torchvision", "numpy", "timm", "scipy", "scikit-learn", "
 # With SMOKE = True this cell fetches CIFAR-10 and runs only the GPU smoke
 # test, and every cell after it skips itself.
 # =============================================================================
-import os
+import os, shutil
 os.chdir(WORK_DIR)
 
 # CIFAR-10: an attached Kaggle Dataset holding the official python version
@@ -340,7 +351,13 @@ if SMOKE:
     # Every model through the real training loop on the T4 -- fp16 autocast,
     # the GradScaler, DataLoader workers, interrupt + resume, the E2/E3/E4
     # code paths. ~2-4 min. A failure raises here and stops the run.
-    run([PY, "scripts/smoke_test.py"])
+    try:
+        run([PY, "scripts/smoke_test.py"])
+    finally:
+        # The work dir is not saved: put the record in the output, pass or fail.
+        record = WORK_DIR / "results" / "smoke_test.json"
+        if record.exists():
+            shutil.copy2(record, OUTPUT_DIR / record.name)
     print("\n>>> SMOKE run passed. Nothing else runs in this version.")
     print(">>> Set SMOKE = False in the CONFIG cell for the real run.")
 else:
@@ -436,55 +453,36 @@ else:
         traceback.print_exc()
 '''),
 
-    # --- cell 8 (code): 7. Package the results.
+    # --- cell 8 (code): 7. Package the results -- this version's whole saved output.
     ('code', r'''
 # =============================================================================
-# 7. Package the results.
+# 7. Package the results -- this version's whole saved output.
 #
-# Two archives:
-#   results.zip        everything, checkpoints included (big)
-#   results_light.zip  json/csv/md/png only -- this is what Phase 9 actually
-#                      needs, and it survives Kaggle's output size cap
+# Kaggle saves /kaggle/working and may cap it at ~500 files, so it gets exactly
+# two, from scripts/kaggle_outputs.py pack:
+#   results_light.zip  json/csv/md/png/... only, no checkpoints -- what Phase 9
+#                      needs; written first, so a full disk cannot cost it
+#   results.zip        everything, checkpoints included -- what a resume (Add
+#                      Input) and a local E5/E6/E7 re-run need
+# Anything else in /kaggle/working is removed. results/ itself, checkpoints and
+# all, stays in the work dir under /kaggle/tmp, which is not saved.
 # =============================================================================
-import os, shutil, zipfile
-from pathlib import Path
+import os
 os.chdir(WORK_DIR)
-
 RESULTS = WORK_DIR / "results"
-OUT = Path("/kaggle/working")
-
-def human(n):
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n /= 1024
-    return f"{n:.1f} TB"
 
 if SMOKE:
-    print("SMOKE = True -- skipped: nothing to package "
-          "(results/smoke_test.json is in the output as it is).")
+    print(f"SMOKE = True -- skipped: the output is {OUTPUT_DIR / 'smoke_test.json'} alone.")
 elif not RESULTS.exists() or not any(RESULTS.rglob("*")):
     print("results/ is empty -- nothing to package.")
 else:
-    # The smoke/self-test scratch dirs are not results.
-    for scratch in ("smoke", "_queue_test", "queue_state"):
-        shutil.rmtree(RESULTS / scratch, ignore_errors=True)
-    full = shutil.make_archive(str(OUT / "results"), "zip", root_dir=str(RESULTS))
-    print(f"results.zip        {human(Path(full).stat().st_size)}")
-
-    light = OUT / "results_light.zip"
-    # .npz = per-run test predictions (E7 agreement matrix, mistake gallery)
-    keep = {".json", ".csv", ".md", ".png", ".yaml", ".log", ".txt", ".npz"}
-    n = 0
-    with zipfile.ZipFile(light, "w", zipfile.ZIP_DEFLATED) as zf:
-        for p in sorted(RESULTS.rglob("*")):
-            if p.is_file() and p.suffix.lower() in keep:
-                zf.write(p, p.relative_to(RESULTS))
-                n += 1
-    print(f"results_light.zip  {human(light.stat().st_size)}  ({n} files, no checkpoints)")
-
-    total = sum(f.stat().st_size for f in OUT.rglob("*") if f.is_file())
-    print(f"\ntotal /kaggle/working output: {human(total)}")
+    # check=False: a failure must still reach the summary and census below.
+    code = run([PY, "scripts/kaggle_outputs.py", "pack", "--results", str(RESULTS),
+                "--out", str(OUTPUT_DIR)], check=False)
+    if code != 0:
+        print("\n" + "!" * 70)
+        print(f"!! Packaging failed (exit {code}). The census below shows what was saved.")
+        print("!" * 70)
 '''),
 
     # --- cell 9 (code): 8. Final summary.
@@ -531,7 +529,7 @@ else:
 # The exact count and each top-level folder's, then the repo clone's breakdown.
 print("\n" + "=" * 78 + "\n  Output file census\n" + "=" * 78)
 run([PY, "scripts/kaggle_outputs.py", "census",
-     "--output", "/kaggle/working", "--work-dir", str(WORK_DIR)], check=False)
+     "--output", str(OUTPUT_DIR), "--work-dir", str(WORK_DIR)], check=False)
 '''),
 
     # --- cell 10 (markdown): 📥 When you get back
@@ -541,13 +539,14 @@ run([PY, "scripts/kaggle_outputs.py", "census",
 ## 📥 When you get back
 
 > After a **SMOKE** run there is nothing to download: read the pre-flight cell's log (or
-> `results/smoke_test.json` in the output), then set `SMOKE = False` and commit again.
+> `smoke_test.json`, the output's one file), then set `SMOKE = False` and commit again.
 
 > **Runs left unfinished** (failed, or dropped for time)? Attach this version's output (**Add
 > Input** → *Notebooks* → this notebook → this version) and commit again. The pre-flight cell
 > restores `results/` from it, and only the unfinished runs train.
 
-1. **Download the archives** from the Output tab of the committed version:
+1. **Download the archives** from the Output tab of the committed version. They are its only
+   files: the run itself worked in `/kaggle/tmp`, which is not saved.
    - `results_light.zip` — tables, figures, metrics, logs. This is what Phase 9 needs.
    - `results.zip` — the same plus checkpoints, if you want to re-run E5/E6/E7 locally.
 
