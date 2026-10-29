@@ -1,5 +1,12 @@
 # 🖼️ Evolution of Vision — CIFAR-10 Architecture Showdown
 
+**TL;DR.** On 32×32 images, convolutional bias matters more than scale: trained from scratch under
+one protocol, the small Simple CNN beats ViT and MLP-Mixer, which have several times its
+parameters. In E2, the best CNN's lead over the best patch model shrinks
+from <!-- n:e2.gap_lo -->16.8<!-- /n --> pp at <!-- n:e2.lo_pct -->10<!-- /n -->% of the data
+to <!-- n:e2.gap_hi -->9.0<!-- /n --> pp at <!-- n:e2.hi_pct -->100<!-- /n -->%. The main caveat:
+the run used a single seed, and every model's learning rate sat at the edge of its sweep.
+
 > **Status: the 9-hour run is done; the write-up is in progress.** The 9h queue ran on Kaggle
 > (2× T4) on 2026-10-26 and every job finished, including the first upgrade (E3 for ResNet-18 and
 > ViT). The [results](#results-9h-run) below come from that run. In them and in the
@@ -89,15 +96,22 @@ epochs, best-validation checkpoint):
 | 6 | **MLP** | 66.8 | 3.8 | 0.01 | 0.44 |
 <!-- /block:e1_scoreboard_short -->
 
-- **E1:** ResNet-18 is a little ahead of Simple CNN, but the gap is small enough to call a tie.
+- **E1:** ResNet-18 is a little ahead of Simple CNN, but the gap is small enough to call a
+  near-tie.
 - **E2:** The best CNN leads the best patch model by <!-- n:e2.gap_lo -->16.8<!-- /n --> points
   at <!-- n:e2.lo_pct -->10<!-- /n -->% of the data and by <!-- n:e2.gap_hi -->9.0<!-- /n -->
   points at <!-- n:e2.hi_pct -->100<!-- /n -->%, so the gap shrinks with more data, as the
-  hypothesis predicts.
+  hypothesis predicts. E2 trains every point for <!-- n:e2.steps -->7,040<!-- /n --> matched
+  optimizer steps rather than <!-- n:e1.epochs -->100<!-- /n --> epochs, so Simple CNN's
+  E2 score at <!-- n:e2.hi_pct -->100<!-- /n -->% of the data
+  (<!-- n:e2.simple_cnn.100 -->90.1<!-- /n -->%) differs from its
+  E1 <!-- n:e1.simple_cnn.acc -->91.8<!-- /n -->%.
 - **E5:** Noise is the worst corruption for all three CNNs. MLP keeps the largest share of its
   clean accuracy, but it also has the lowest corrupted accuracy of any model, so that isn't a win.
-- **E6:** Under pixel shuffle, ResNet-18, Simple CNN and ConvNeXt-mini all keep only
-  about <!-- n:e6.cnn.pixel.keep -->18<!-- /n -->% of their clean accuracy, averaged over the three
+- **E6:** E6 cuts each image into a grid of patches. *Patch shuffle* reorders the whole patches
+  and keeps the pixels inside each one; *pixel shuffle* reorders the pixels inside each patch and
+  leaves the patches in place. Under pixel shuffle, ResNet-18, Simple CNN and ConvNeXt-mini all
+  keep only about <!-- n:e6.cnn.pixel.keep -->18<!-- /n -->% of their clean accuracy, averaged over the three
   grid sizes.
 - **E6 (ViT):** ViT keeps about <!-- n:e6.vit.patch_8x8.keep -->61<!-- /n -->% of its clean
   accuracy under the 8×8 patch shuffle, but that's partly because the grid lines up with its
@@ -106,14 +120,38 @@ epochs, best-validation checkpoint):
   from <!-- n:e1.vit.acc -->80.1<!-- /n -->% to <!-- n:e6.vit.patch_8x8 -->49.3<!-- /n -->%.
 - **E7:** ConvNeXt-mini and ResNet-18 are basically tied on how cleanly their features separate
   the classes.
-- **E4:** Pretrained ViT hits <!-- n:e4.vit_small_patch16_224.acc -->98.2<!-- /n -->%, but
-  ViT-S/16 was pretrained on ImageNet-21k, which ResNet-50 didn't see, so it's not a fair match.
-- **E3:** Single seed. ResNet-18 got a bit better with strong augmentation and ViT got a bit
-  worse. Didn't match the hypothesis that strong augmentation helps ViT more than the CNNs. This
-  covers only ResNet-18 and ViT in the 9h run.
+- **E4:** Pretrained ViT-S/16 hits <!-- n:e4.vit_small_patch16_224.acc -->98.2<!-- /n -->% and
+  pretrained ResNet-50 <!-- n:e4.resnet50.acc -->96.8<!-- /n -->%. Over their from-scratch
+  counterparts, those are gains of <!-- n:e4.vit_small_patch16_224.gain -->+18.1<!-- /n --> pp
+  and <!-- n:e4.resnet50.gain -->+3.7<!-- /n --> pp. But ViT-S/16 was pretrained on ImageNet-21k,
+  which ResNet-50 didn't see, so it's not a fair match.
+- **E3:** Single seed. ResNet-18 got a bit better with strong augmentation
+  (<!-- n:e3.resnet18.gain -->+2.2<!-- /n --> pp) and ViT got a bit
+  worse (<!-- n:e3.vit.gain -->-1.9<!-- /n --> pp). Didn't match the hypothesis that strong
+  augmentation helps ViT more than the CNNs. This covers only ResNet-18 and ViT in the 9h run.
 - **Compute:** The <!-- n:compute.gpu_hours -->10.8<!-- /n --> GPU-hours is training only. The
   evaluation runs (E5–E7) add <!-- n:compute.eval_hours -->0.1<!-- /n --> h, and the whole queue
   used <!-- n:compute.queue_gpu_hours -->11.2<!-- /n --> GPU-hours, counting each job's start-up.
+
+---
+
+## What I learned
+
+- **On 32×32 data, convolutional bias is worth more than scale.** The Simple CNN
+  reaches <!-- n:e1.simple_cnn.acc -->91.8<!-- /n -->% with
+  only <!-- n:e1.simple_cnn.params_m -->1.1<!-- /n -->M parameters, ahead of ViT
+  (<!-- n:e1.vit.acc -->80.1<!-- /n -->%) and MLP-Mixer
+  (<!-- n:e1.mlp_mixer.acc -->83.6<!-- /n -->%), which have several times as many. ResNet-18,
+  with about ten times its parameters, is only a near-tie ahead of it.
+- **The CNN lead shrinks with more data.** In E2 the gap between the best CNN and the best patch
+  model falls from <!-- n:e2.gap_lo -->16.8<!-- /n --> pp to <!-- n:e2.gap_hi -->9.0<!-- /n --> pp
+  as the training set grows from <!-- n:e2.lo_pct -->10<!-- /n -->%
+  to <!-- n:e2.hi_pct -->100<!-- /n -->%. It shrinks, but it doesn't close.
+- **ViT only becomes competitive with ImageNet-21k pretraining.** From scratch it trails every
+  CNN; pretrained on ImageNet-21k, ViT-S/16
+  reaches <!-- n:e4.vit_small_patch16_224.acc -->98.2<!-- /n -->%, a near-tie with the ImageNet-1k
+  ResNet-50's <!-- n:e4.resnet50.acc -->96.8<!-- /n -->%. This run didn't try ViT with ImageNet-1k
+  pretraining alone, so it can't say how much of that is the larger pretraining set.
 
 ---
 
@@ -196,7 +234,7 @@ python scripts/run_all.py --mode 9h         # the whole queue, resumable -- this
 
 # 6. E5-E7 evaluation on finished E1 checkpoints (normally run by the queue)
 python -m src.corruptions --exp E5          # robustness: 6 corruptions x 5 severities
-python -m src.corruptions --exp E6          # patch shuffle
+python -m src.corruptions --exp E6          # patch shuffle and pixel shuffle
 python -m src.interpret.e7                  # interpretability figures
 
 # 7. Phase 9 -- report: tables, figures, REPORT.md and the numbers in this README
@@ -226,7 +264,7 @@ cifar10-architecture-showdown/
 │   ├── train.py  evaluate.py  profile.py   # ✅ Phase 3: the one training loop + metrics + costs
 │   ├── experiments.py  runner.py      # ✅ Phase 3: every job of E1-E7, the unattended queue
 │   ├── analysis.py                    # ✅ shared plumbing for the evaluation-only experiments
-│   ├── corruptions.py                 # ✅ E5 robustness + E6 patch shuffle
+│   ├── corruptions.py                 # ✅ E5 robustness + E6 patch shuffle, pixel shuffle
 │   └── interpret/                     # ✅ E7 interpretability
 ├── scripts/
 │   ├── env_check.py                   # ✅ Phase 0
@@ -273,7 +311,9 @@ Three decisions in `src/data.py` that the rest of the project depends on:
   improving with longer training, so this setup slightly **favours the CNNs**.
 - **E2 is step-matched but short** (<!-- n:e2.steps -->7,040<!-- /n --> steps), so absolute E2
   accuracies sit below E1's.
-- **LRs were auto-picked**, and every model's pick, ViT's included, was at the edge of the sweep.
+- **LRs were auto-picked**, and every model's chosen rate sat at the edge of the sweep (the lowest
+  rate tried for ViT and MLP-Mixer, the highest for the rest), so a better rate may lie outside
+  it and the ViT and MLP-Mixer numbers may be understated.
 - **ViT's <!-- n:e1.vit.acc2 -->80.13<!-- /n -->% is the number to use**; the <!-- n:e5.vit.clean2 -->80.15<!-- /n -->%
   (shown as <!-- n:e5.vit.clean -->80.2<!-- /n -->%) in the E5/E6 tables is a re-scoring
   difference of a few images. The MLP has the same gap
