@@ -65,8 +65,8 @@ flowchart LR
   r0["ResNet-18<br/>11.2M params"]:::name ~~~ r1["Stem<br/>conv3, no max-pool"]:::conv --> r2["Stages 1–2<br/>64, 128 ch · residual"]:::conv --> r3["Stages 3–4<br/>256, 512 ch · residual"]:::conv --> r4["Classifier<br/>avg pool → 10"]:::dense
   x0["ConvNeXt-mini<br/>8.5M params"]:::name ~~~ x1["Stem<br/>conv3, 64 ch"]:::conv --> x2["Stages 1–2<br/>2 + 2 blocks"]:::conv --> x3["Stages 3–4<br/>6 + 2 blocks"]:::conv --> x4["Classifier<br/>avg pool, LN → 10"]:::dense
   v0["ViT<br/>8.3M params"]:::name ~~~ v1["Patch 4×4<br/>64 tokens"]:::patch --> v2["Add cls + pos<br/>65 × 384"]:::patch --> v3["Encoder ×7<br/>6-head attention"]:::patch --> v4["Classifier<br/>cls token → 10"]:::dense
-  k0["MLP-Mixer<br/>9.7M params"]:::name ~~~ k1["Patch 4×4<br/>64 × 384, no pos"]:::patch --> k2["Token mix<br/>64 → 192 → 64"]:::patch --> k3["Channel mix<br/>384 → 1536 → 384"]:::patch --> k4["Classifier<br/>avg pool → 10"]:::dense
-  k3 -.->|×8| k2
+  k0["MLP-Mixer<br/>9.7M params"]:::name ~~~ k1["Patch 4×4<br/>64 × 384, no pos"]:::patch --> k2["Token mix ×8<br/>64 → 192 → 64"]:::patch --> k3["Channel mix ×8<br/>384 → 1536 → 384"]:::patch --> k4["Classifier<br/>avg pool → 10"]:::dense
+  k3 -.-> k2
   classDef name fill:none,stroke:none,font-weight:bold
   classDef dense fill:#F1EFE8,stroke:#5F5E5A,color:#444441
   classDef conv fill:#E1F5EE,stroke:#0F6E56,color:#085041
