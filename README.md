@@ -55,6 +55,24 @@ MLP, Simple CNN, ViT and MLP-Mixer are written by hand (that is the point of the
 ResNet-18 and ConvNeXt-mini are hand-written too; `timm` is used only as a parameter-count
 cross-check.
 
+How each model gets from a 32×32 image to one of the 10 classes. Teal blocks are convolutions,
+purple blocks work on 4×4 patch tokens, and grey blocks are dense layers.
+
+```mermaid
+flowchart LR
+  m0["MLP<br/>3.8M params"]:::name ~~~ m1["Flatten<br/>3072 values"]:::dense --> m2["Dense<br/>1024 units"]:::dense --> m3["Dense ×2<br/>512 → 256"]:::dense --> m4["Classifier<br/>10 classes"]:::dense
+  c0["Simple CNN<br/>1.1M params"]:::name ~~~ c1["Stage 1<br/>64 ch · 32→16"]:::conv --> c2["Stage 2<br/>128 ch · 16→8"]:::conv --> c3["Stage 3<br/>256 ch · 8→4"]:::conv --> c4["Classifier<br/>avg pool → 10"]:::dense
+  r0["ResNet-18<br/>11.2M params"]:::name ~~~ r1["Stem<br/>conv3, no max-pool"]:::conv --> r2["Stages 1–2<br/>64, 128 ch · residual"]:::conv --> r3["Stages 3–4<br/>256, 512 ch · residual"]:::conv --> r4["Classifier<br/>avg pool → 10"]:::dense
+  x0["ConvNeXt-mini<br/>8.5M params"]:::name ~~~ x1["Stem<br/>conv3, 64 ch"]:::conv --> x2["Stages 1–2<br/>2 + 2 blocks"]:::conv --> x3["Stages 3–4<br/>6 + 2 blocks"]:::conv --> x4["Classifier<br/>avg pool, LN → 10"]:::dense
+  v0["ViT<br/>8.3M params"]:::name ~~~ v1["Patch 4×4<br/>64 tokens"]:::patch --> v2["Add cls + pos<br/>65 × 384"]:::patch --> v3["Encoder ×7<br/>6-head attention"]:::patch --> v4["Classifier<br/>cls token → 10"]:::dense
+  k0["MLP-Mixer<br/>9.7M params"]:::name ~~~ k1["Patch 4×4<br/>64 × 384, no pos"]:::patch --> k2["Token mix<br/>64 → 192 → 64"]:::patch --> k3["Channel mix<br/>384 → 1536 → 384"]:::patch --> k4["Classifier<br/>avg pool → 10"]:::dense
+  k3 -.->|×8| k2
+  classDef name fill:none,stroke:none,font-weight:bold
+  classDef dense fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+  classDef conv fill:#E1F5EE,stroke:#0F6E56,color:#085041
+  classDef patch fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+```
+
 ---
 
 ## The fairness protocol
@@ -172,6 +190,30 @@ optimizer state and CUDA's own overhead. So the largest models are unlikely to f
 protocol's batch size, and changing the batch size would break the fairness protocol.
 
 So the split is: **build and verify locally on CPU, train on Kaggle with 2× T4.**
+
+```mermaid
+flowchart LR
+  subgraph laptop ["Build on the laptop (CPU)"]
+    direction TB
+    a["Phases 0–2<br/>env, data, model checks"]:::cpu --> b["Phase 3 gates<br/>smoke test, queue self-test"]:::cpu
+  end
+  subgraph kaggle ["Train on Kaggle (2× T4)"]
+    direction TB
+    c["plan_budget.py<br/>times T4s, fits the queue"]:::gpu --> d["run_all.py<br/>LR sweep, then E1–E7"]:::gpu
+  end
+  subgraph report ["Report on the laptop (CPU)"]
+    direction TB
+    e["results_light.zip<br/>v1.0 release"]:::out --> f["make_report.py<br/>REPORT.md, figures<br/>README numbers"]:::out
+  end
+  laptop -- "notebook clones the repo" --> kaggle
+  kaggle -- "results zips" --> report
+  style laptop fill:none,stroke:#888780
+  style kaggle fill:none,stroke:#7F77DD
+  style report fill:none,stroke:#1D9E75
+  classDef cpu fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+  classDef gpu fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+  classDef out fill:#E1F5EE,stroke:#0F6E56,color:#085041
+```
 
 `scripts/estimate_compute.py` puts the 9h-mode core queue at **~12 GPU-hours**, which is **~6.7 h
 wall-clock on 2× T4** and does *not* fit an 8 h budget on a single T4. Full mode is a **multi-day**
